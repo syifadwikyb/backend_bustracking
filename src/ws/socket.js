@@ -21,3 +21,9 @@ export function emitBusUpdate(data) {
         io.emit("bus_location", data);
     }
 }
+
+export function emitPassengerUpdate(data) {
+    if (io) {
+        io.emit("passenger_update", data);
+    }
+}

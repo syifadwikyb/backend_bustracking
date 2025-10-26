@@ -34,7 +34,7 @@ const Schedule = sequelize.define('Schedule', {
         allowNull: false,
     },
     status: {
-        type: DataTypes.ENUM('dijadwalkan', 'berjalan', 'selesai', 'dibatalkan'),
+        type: DataTypes.ENUM('dijadwalkan', 'berjalan', 'selesai'),
         allowNull: false,
         defaultValue: 'dijadwalkan'
     }

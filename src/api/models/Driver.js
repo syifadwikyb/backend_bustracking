@@ -25,11 +25,11 @@ const Driver = sequelize.define('Driver', {
         allowNull: false,
     },
     foto: {
-        type: DataTypes.STRING, // bisa simpan URL/filename
+        type: DataTypes.STRING,
         allowNull: true,
     },
     status: {
-        type: DataTypes.ENUM('aktif', 'non-aktif'),
+        type: DataTypes.ENUM('aktif', 'tidak aktif'),
         defaultValue: 'aktif',
     }
 }, {

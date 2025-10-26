@@ -1,24 +1,23 @@
-// src/api/controllers/maintenanceController.js
-
 import Maintenance from '../models/Maintenance.js';
 import Bus from '../models/Bus.js';
 
 // Membuat catatan maintenance baru
 export const createMaintenance = async (req, res) => {
-    // Sekarang kita menerima kode_bus, bukan bus_id
-    const { kode_bus, tanggal_perbaikan, deskripsi, status, harga } = req.body;
+    // Sekarang kita menerima bus_id dari body
+    const { bus_id, tanggal_perbaikan, deskripsi, status, harga } = req.body;
+
     try {
         const maintenance = await Maintenance.create({
-            kode_bus,
+            bus_id,
             tanggal_perbaikan,
             deskripsi,
             status,
             harga
         });
 
-        // Update status bus berdasarkan kode_bus
+        // Update status bus berdasarkan kondisi maintenance
         if (status === 'sedang diperbaiki' || status === 'dijadwalkan') {
-            await Bus.update({ status: 'dalam perbaikan' }, { where: { kode_bus: kode_bus } });
+            await Bus.update({ status: 'dalam perbaikan' }, { where: { id_bus: bus_id } });
         }
 
         res.status(201).json(maintenance);
@@ -27,14 +26,14 @@ export const createMaintenance = async (req, res) => {
     }
 };
 
-// Mendapatkan semua riwayat maintenance (tidak ada perubahan signifikan di sini)
+// Mendapatkan semua riwayat maintenance
 export const getAllMaintenance = async (req, res) => {
     try {
         const maintenances = await Maintenance.findAll({
             include: {
                 model: Bus,
                 as: 'bus',
-                attributes: ['plat_nomor', 'kode_bus']
+                attributes: ['id_bus', 'plat_nomor', 'status']
             }
         });
         res.json(maintenances);
@@ -43,7 +42,7 @@ export const getAllMaintenance = async (req, res) => {
     }
 };
 
-// Mendapatkan satu catatan maintenance (tidak ada perubahan signifikan di sini)
+// Mendapatkan satu catatan maintenance
 export const getMaintenanceById = async (req, res) => {
     try {
         const maintenance = await Maintenance.findByPk(req.params.id, {
@@ -65,9 +64,8 @@ export const updateMaintenance = async (req, res) => {
         const { tanggal_perbaikan, deskripsi, status, harga } = req.body;
         await maintenance.update({ tanggal_perbaikan, deskripsi, status, harga });
 
-        // Update status bus berdasarkan kode_bus yang tersimpan di catatan maintenance
         if (status === 'selesai') {
-            await Bus.update({ status: 'aktif' }, { where: { kode_bus: maintenance.kode_bus } });
+            await Bus.update({ status: 'aktif' }, { where: { id_bus: maintenance.bus_id } });
         }
 
         res.json(maintenance);
@@ -76,7 +74,7 @@ export const updateMaintenance = async (req, res) => {
     }
 };
 
-// Menghapus catatan maintenance (tidak ada perubahan)
+// Menghapus catatan maintenance
 export const deleteMaintenance = async (req, res) => {
     try {
         const maintenance = await Maintenance.findByPk(req.params.id);

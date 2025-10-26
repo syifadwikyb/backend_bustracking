@@ -32,6 +32,23 @@ const Bus = sequelize.define('Bus', {
     status: {
         type: DataTypes.ENUM('aktif', 'tidak aktif', 'dalam perbaikan'),
         allowNull: false,
+    },
+    latitude: {
+        type: DataTypes.DECIMAL(10, 8),
+        allowNull: true
+    },
+    longitude: {
+        type: DataTypes.DECIMAL(11, 8),
+        allowNull: true
+    },
+    penumpang: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0
+    },
+    terakhir_dilihat: {
+        type: DataTypes.DATE,
+        allowNull: true
     }
 }, {
     tableName: 'bus',

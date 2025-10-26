@@ -5,8 +5,7 @@ import Bus from "../models/Bus.js";
 import Driver from "../models/Driver.js";
 import Schedule from "../models/Schedule.js";
 
-function setupAssociations() {
-    // Hubungan One-to-Many: Satu Jalur punya banyak Halte
+function setupAssociations() {    
     Jalur.hasMany(Halte, {
         foreignKey: 'jalur_id',
         as: 'halte'
@@ -17,7 +16,6 @@ function setupAssociations() {
         as: 'jalur'
     });
 
-    // Asosiasi Bus dan Maintenance
     Bus.hasMany(Maintenance, {
         foreignKey: 'bus_id',
         as: 'riwayat_perbaikan'

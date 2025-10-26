@@ -1,5 +1,4 @@
 // src/api/models/Maintenance.js
-
 import { DataTypes } from 'sequelize';
 import sequelize from "../config/db.js";
 
@@ -9,8 +8,8 @@ const Maintenance = sequelize.define('Maintenance', {
         autoIncrement: true,
         primaryKey: true,
     },
-    kode_bus: {
-        type: DataTypes.STRING,
+    bus_id: {
+        type: DataTypes.INTEGER,
         allowNull: false,
     },
     tanggal_perbaikan: {
@@ -22,9 +21,9 @@ const Maintenance = sequelize.define('Maintenance', {
         allowNull: false,
     },
     status: {
-        type: DataTypes.ENUM('dijadwalkan', 'sedang diperbaiki', 'selesai', 'dibatalkan'),
+        type: DataTypes.ENUM('sedang diperbaiki', 'selesai'),
         allowNull: false,
-        defaultValue: 'dijadwalkan',
+        defaultValue: 'sedang diperbaiki',
     },
     harga: {
         type: DataTypes.INTEGER,

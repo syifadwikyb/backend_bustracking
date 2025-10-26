@@ -15,6 +15,7 @@ import halteRoutes from './api/routes/halteRoutes.js';
 import jalurRoutes from './api/routes/jalurRoutes.js';
 import maintenanceRoutes from "./api/routes/maintenanceRoutes.js";
 import scheduleRoutes from "./api/routes/scheduleRoutes.js";
+import dashboardRoutes from './api/routes/dashboardRoutes.js';
 
 // Import Modul Lain
 import initSocket from './ws/socket.js';
@@ -36,6 +37,7 @@ app.use('/api/halte', halteRoutes);
 app.use('/api/jalur', jalurRoutes);
 app.use('/api/maintenance', maintenanceRoutes)
 app.use('/api/schedules', scheduleRoutes)
+app.use('/api/dashboard', dashboardRoutes);
 
 // --- Setup Server ---
 const server = createServer(app);
