@@ -45,12 +45,18 @@ initSocket(server);
 
 const startServer = async () => {
     try {
-        await sequelize.authenticate();
-        console.log('✅ Koneksi database berhasil.');
-
+        // 1️⃣ Setup relasi antar model terlebih dahulu
         setupAssociations();
         console.log('🔗 Hubungan antar model berhasil disetel.');
 
+        // 2️⃣ Baru koneksi ke database
+        await sequelize.authenticate();
+        console.log('✅ Koneksi database berhasil.');
+
+        // (Opsional) Sinkronisasi struktur database
+        // await sequelize.sync({ alter: false });
+
+        // 3️⃣ Jalankan server
         const PORT = process.env.PORT || 5000;
         server.listen(PORT, () => {
             console.log(`🚀 Server berjalan di port ${PORT}`);

@@ -1,8 +1,7 @@
 import { DataTypes } from 'sequelize';
 import sequelize from "../config/db.js";
 
-const PassengerHistory = sequelize.define('PassengerHistory', {
-    // Ganti 'id' menjadi 'id_penumpang'
+const PassengerHistory = sequelize.define('PassengerHistory', {    
     id_penumpang: {
         type: DataTypes.INTEGER,
         autoIncrement: true,

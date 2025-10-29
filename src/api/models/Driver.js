@@ -29,8 +29,8 @@ const Driver = sequelize.define('Driver', {
         allowNull: true,
     },
     status: {
-        type: DataTypes.ENUM('aktif', 'tidak aktif'),
-        defaultValue: 'aktif',
+        type: DataTypes.ENUM('berjalan', 'berhenti'),
+        defaultValue: 'berhenti',
     }
 }, {
     tableName: 'drivers',

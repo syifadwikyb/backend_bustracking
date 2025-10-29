@@ -30,8 +30,9 @@ const Bus = sequelize.define('Bus', {
         allowNull: true
     },
     status: {
-        type: DataTypes.ENUM('aktif', 'tidak aktif', 'dalam perbaikan'),
+        type: DataTypes.ENUM('berhenti', 'berjalan', 'dalam perbaikan'),
         allowNull: false,
+        defaultValue: 'berhenti',
     },
     latitude: {
         type: DataTypes.DECIMAL(10, 8),

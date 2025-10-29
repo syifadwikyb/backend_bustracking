@@ -65,7 +65,7 @@ export const updateMaintenance = async (req, res) => {
         await maintenance.update({ tanggal_perbaikan, deskripsi, status, harga });
 
         if (status === 'selesai') {
-            await Bus.update({ status: 'aktif' }, { where: { id_bus: maintenance.bus_id } });
+            await Bus.update({ status: 'berhenti' }, { where: { id_bus: maintenance.bus_id } });
         }
 
         res.json(maintenance);

@@ -1,5 +1,3 @@
-// src/api/models/Schedule.js
-
 import { DataTypes } from 'sequelize';
 import sequelize from "../config/db.js";
 
