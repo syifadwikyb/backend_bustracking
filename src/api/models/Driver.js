@@ -29,7 +29,8 @@ const Driver = sequelize.define('Driver', {
         allowNull: true,
     },
     status: {
-        type: DataTypes.ENUM('berjalan', 'berhenti'),
+        // --- PERBAIKAN ---
+        type: DataTypes.ENUM('berjalan', 'berhenti', 'dijadwalkan'),
         defaultValue: 'berhenti',
     }
 }, {

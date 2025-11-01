@@ -5,7 +5,7 @@ import Bus from "../models/Bus.js";
 import Driver from "../models/Driver.js";
 import Schedule from "../models/Schedule.js";
 
-function setupAssociations() {    
+function setupAssociations() {
   // 📍 Relasi Jalur ↔ Halte
   Jalur.hasMany(Halte, {
     foreignKey: 'jalur_id',
@@ -35,21 +35,22 @@ function setupAssociations() {
   // 🚌 Relasi utama Bus ↔ Schedule ↔ Driver ↔ Jalur
   Bus.hasMany(Schedule, {
     foreignKey: 'bus_id',
-    as: 'jadwal', // 🟢 untuk relasi utama di dashboard
+    as: 'jadwal',
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE'
   });
 
   Driver.hasMany(Schedule, {
     foreignKey: 'driver_id',
-    as: 'jadwal_driver', // 🟡 ubah alias
+    // --- PERBAIKAN ---
+    as: 'jadwal', // Diubah dari 'jadwal_driver'
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE'
   });
 
   Jalur.hasMany(Schedule, {
     foreignKey: 'jalur_id',
-    as: 'jadwal_jalur', // 🟠 ubah alias
+    as: 'jadwal_jalur',
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE'
   });
