@@ -1,7 +1,7 @@
 import mqtt from "mqtt";
 import { emitBusUpdate, emitPassengerUpdate } from "../ws/socket.js";
 import Bus from "../api/models/Bus.js";
-import PassengerHistory from "../api/models/PassengerHistory.js";
+import PassengerHistory from "../api/models/PassengerStat.js";
 import db from "../api/config/db.js"; // <-- PENTING: Impor 'db' untuk query mentah
 
 const client = mqtt.connect("mqtt://broker.hivemq.com:1883");

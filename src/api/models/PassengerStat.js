@@ -2,7 +2,7 @@ import { DataTypes } from 'sequelize';
 import sequelize from "../config/db.js";
 
 const PassengerHistory = sequelize.define('PassengerHistory', {    
-    id_penumpang: {
+    id_stat: {
         type: DataTypes.INTEGER,
         autoIncrement: true,
         primaryKey: true,
@@ -11,7 +11,7 @@ const PassengerHistory = sequelize.define('PassengerHistory', {
         type: DataTypes.INTEGER,
         allowNull: false,
     },    
-    jumlah_penumpang: {
+    passenger_stat: {
         type: DataTypes.INTEGER,
         allowNull: false,
     },
@@ -21,7 +21,9 @@ const PassengerHistory = sequelize.define('PassengerHistory', {
     }
 }, {
     tableName: 'passenger_history',
-    timestamps: false
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
 });
 
 export default PassengerHistory;

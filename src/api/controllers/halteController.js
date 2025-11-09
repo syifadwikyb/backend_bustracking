@@ -1,4 +1,5 @@
 import Halte from '../models/Halte.js';
+import Jalur from '../models/Jalur.js';
 
 export const createHalte = async (req, res) => {
     // Ambil semua data yang dibutuhkan dari body request
@@ -24,12 +25,20 @@ export const createHalte = async (req, res) => {
 };
 
 export const getAllHalte = async (req, res) => {
-    try {
-        const halte = await Halte.findAll();
-        res.json(halte);
-    } catch (err) {
-        res.status(500).json({message: err.message});
-    }
+  try {
+    const halte = await Halte.findAll({
+      include: [
+        {
+          model: Jalur,
+          as: 'jalur',
+          attributes: ['nama_jalur'] // hanya ambil kolom nama_jalur
+        }
+      ]
+    });
+    res.json(halte);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 export const getHalteById = async (req, res) => {

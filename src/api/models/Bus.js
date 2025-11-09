@@ -30,7 +30,7 @@ const Bus = sequelize.define('Bus', {
         allowNull: true
     },
     status: {
-        type: DataTypes.ENUM('berhenti', 'berjalan', 'dalam perbaikan'),
+        type: DataTypes.ENUM('berhenti', 'dijadwalkan', 'berjalan', 'dalam perbaikan'),
         allowNull: false,
         defaultValue: 'berhenti',
     },

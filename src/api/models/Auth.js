@@ -18,7 +18,9 @@ const Auth = sequelize.define("Auth", {
     },
 }, {
     tableName: "auth",
-    timestamps: true
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
 });
 
 export default Auth;

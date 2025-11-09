@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 // Membuat jadwal baru
 export const createSchedule = async (req, res) => {
   const { bus_id, driver_id, jalur_id, tanggal, jam_mulai, jam_selesai, status } = req.body;
+
   try {
     const schedule = await Schedule.create({
       bus_id,
@@ -15,8 +16,9 @@ export const createSchedule = async (req, res) => {
       tanggal,
       jam_mulai,
       jam_selesai,
-      status: status || 'dijadwalkan', // <-- Sudah benar
+      status: status || 'dijadwalkan',
     });
+
     res.status(201).json({
       message: 'Jadwal berhasil dibuat',
       data: schedule,
@@ -26,7 +28,7 @@ export const createSchedule = async (req, res) => {
   }
 };
 
-// Mendapatkan semua jadwal dengan sinkronisasi otomatis
+// Mendapatkan semua jadwal + update otomatis status
 export const getAllSchedules = async (req, res) => {
   try {
     const now = dayjs();
@@ -39,29 +41,49 @@ export const getAllSchedules = async (req, res) => {
       ],
     });
 
-    // --- Logika Sinkronisasi Status (Sudah Benar) ---
     for (const s of schedules) {
       const start = dayjs(`${s.tanggal} ${s.jam_mulai}`);
       const end = dayjs(`${s.tanggal} ${s.jam_selesai}`);
-      let newStatus = 'dijadwalkan'; // Default untuk jadwal yang akan datang
+      let newStatus = 'dijadwalkan';
+
+      // Pastikan tanggal & jam valid
+      if (!start.isValid() || !end.isValid()) {
+        console.warn('Format waktu tidak valid untuk jadwal:', s.id_schedule);
+        continue;
+      }
 
       if (now.isAfter(start) && now.isBefore(end)) {
         newStatus = 'berjalan';
       } else if (now.isAfter(end)) {
-        newStatus = 'berhenti';
+        newStatus = 'selesai';
       }
-          
+
       if (s.status !== newStatus) {
         s.status = newStatus;
         await s.save();
       }
-      if (s.bus_id) await Bus.update({ status: newStatus }, { where: { id_bus: s.bus_id } });
-      if (s.driver_id) await Driver.update({ status: newStatus }, { where: { id_driver: s.driver_id } });
+
+      // Update status bus & driver jika ada
+      if (s.bus_id) {
+        await Bus.update({ status: newStatus }, { where: { id_bus: s.bus_id } });
+      }
+      if (s.driver_id) {
+        await Driver.update({ status: newStatus }, { where: { id_driver: s.driver_id } });
+      }
     }
+
+    // Ambil ulang jadwal setelah sinkronisasi
+    const updatedSchedules = await Schedule.findAll({
+      include: [
+        { model: Bus, as: 'bus' },
+        { model: Driver, as: 'driver' },
+        { model: Jalur, as: 'jalur' },
+      ],
+    });
 
     res.status(200).json({
       message: 'Berhasil mendapatkan semua jadwal',
-      data: schedules,
+      data: updatedSchedules,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -79,7 +101,9 @@ export const getScheduleById = async (req, res) => {
       ],
     });
 
-    if (!schedule) return res.status(404).json({ message: 'Jadwal tidak ditemukan' });
+    if (!schedule) {
+      return res.status(404).json({ message: 'Jadwal tidak ditemukan' });
+    }
 
     res.status(200).json({
       message: 'Berhasil mendapatkan jadwal',
@@ -94,7 +118,6 @@ export const getScheduleById = async (req, res) => {
 export const updateSchedule = async (req, res) => {
   try {
     const schedule = await Schedule.findByPk(req.params.id);
-
     if (!schedule) return res.status(404).json({ message: 'Jadwal tidak ditemukan' });
 
     const { bus_id, driver_id, jalur_id, tanggal, jam_mulai, jam_selesai, status } = req.body;
