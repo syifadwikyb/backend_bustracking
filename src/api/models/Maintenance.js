@@ -16,14 +16,18 @@ const Maintenance = sequelize.define('Maintenance', {
         type: DataTypes.DATEONLY,
         allowNull: false,
     },
+    tanggal_selesai: {
+        type: DataTypes.DATEONLY,
+        allowNull: true, // bisa kosong
+    },
     deskripsi: {
         type: DataTypes.TEXT,
-        allowNull: false,
+        allowNull: true,
     },
     status: {
-        type: DataTypes.ENUM('sedang diperbaiki', 'selesai'),
+        type: DataTypes.ENUM('dijadwalkan', 'sedang diperbaiki', 'selesai'),
         allowNull: false,
-        defaultValue: 'sedang diperbaiki',
+        defaultValue: 'dijadwalkan',
     },
     harga: {
         type: DataTypes.INTEGER,
