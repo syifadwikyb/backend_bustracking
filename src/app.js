@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import { createServer } from "http";
+import { fileURLToPath } from 'url';
 
 // Import Konfigurasi & Koneksi
 import sequelize from './api/config/db.js';
@@ -18,18 +19,34 @@ import scheduleRoutes from "./api/routes/scheduleRoutes.js";
 import dashboardRoutes from './api/routes/dashboardRoutes.js';
 
 // Import Modul Lain
+// NOTE: Socket.io dan MQTT tidak berjalan sempurna di Vercel (Serverless)
+// Kode ini dimodifikasi agar tidak error saat deploy
 import initSocket from './ws/socket.js';
-import "./mqtt/mqttClient.js"; // Inisialisasi MQTT Client
+
+// Mencegah MQTT running di Vercel agar tidak timeout (optional)
+if (process.env.NODE_ENV !== 'production') {
+    // import "./mqtt/mqttClient.js"; // Uncomment jika ingin jalan di local
+}
 
 // --- Konfigurasi Awal ---
 dotenv.config();
 const app = express();
 
 // --- Middleware ---
-app.use(express.json()); // Middleware untuk parsing JSON
-app.use(cors()); // Middleware untuk mengizinkan request dari origin lain (misal: React di port 3000)
+app.use(express.json());
+app.use(cors());
+
+// --- Initial Setup (Database Associations) ---
+// Jalankan asosiasi model segera agar siap saat request masuk
+try {
+    setupAssociations();
+    console.log('🔗 Hubungan antar model berhasil disetel.');
+} catch (err) {
+    console.error('Gagal setup asosiasi:', err);
+}
 
 // --- Daftarkan Routes API ---
+app.get('/', (req, res) => res.send('Backend API is Running...')); // Route Check
 app.use('/api/auth', authRoutes);
 app.use('/api/drivers', driverRoutes);
 app.use('/api/bus', busRoutes);
@@ -39,34 +56,38 @@ app.use('/api/maintenance', maintenanceRoutes)
 app.use('/api/schedules', scheduleRoutes)
 app.use('/api/dashboard', dashboardRoutes);
 
-// --- Setup Server ---
-const server = createServer(app);
-initSocket(server);
 
-const startServer = async () => {
+// --- LOGIKA KONEKSI DATABASE ---
+// Di serverless, koneksi DB dilakukan saat runtime, bukan saat startup server
+const connectDB = async () => {
     try {
-        // 1️⃣ Setup relasi antar model terlebih dahulu
-        setupAssociations();
-        console.log('🔗 Hubungan antar model berhasil disetel.');
-
-        // 2️⃣ Baru koneksi ke database
         await sequelize.authenticate();
         console.log('✅ Koneksi database berhasil.');
-
-        // (Opsional) Sinkronisasi struktur database
-        // await sequelize.sync({ alter: false });
-
-        // 3️⃣ Jalankan server
-        const PORT = process.env.PORT || 5000;
-        server.listen(PORT, () => {
-            console.log(`🚀 Server berjalan di port ${PORT}`);
-        });
-
+        // await sequelize.sync({ alter: false }); // Hati-hati menggunakan sync di production
     } catch (error) {
-        console.error('❌ Gagal terhubung ke database atau memulai server:', error);
+        console.error('❌ Gagal terhubung ke database:', error);
     }
 };
 
-// --- Jalankan Server ---
-startServer();
+// Panggil fungsi connectDB. 
+// Di Vercel, ini akan berjalan setiap kali "Function" dibangunkan.
+connectDB();
 
+// --- JALANKAN SERVER (HANYA UNTUK LOCAL / VPS) ---
+// Pengecekan: Apakah file ini dijalankan langsung (node app.js)?
+// Jika YA -> Jalankan server.listen
+// Jika TIDAK (di-import Vercel) -> Jangan jalankan listen
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    const server = createServer(app);
+
+    // Socket hanya diinisialisasi jika berjalan sebagai server tradisional
+    initSocket(server);
+
+    const PORT = process.env.PORT || 5000;
+    server.listen(PORT, () => {
+        console.log(`🚀 Server berjalan (Mode Local) di port ${PORT}`);
+    });
+}
+
+// Export app untuk Vercel
+export default app;

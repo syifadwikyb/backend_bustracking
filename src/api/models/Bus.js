@@ -50,6 +50,22 @@ const Bus = sequelize.define('Bus', {
     terakhir_dilihat: {
         type: DataTypes.DATE,
         allowNull: true
+    },
+    last_halte_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+    },
+    next_halte_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+    },
+    distance_to_next_halte: {
+        type: DataTypes.INTEGER, // Dalam meter
+        allowNull: true
+    },
+    eta_seconds: {
+        type: DataTypes.INTEGER, // Dalam detik
+        allowNull: true
     }
 }, {
     tableName: 'bus',

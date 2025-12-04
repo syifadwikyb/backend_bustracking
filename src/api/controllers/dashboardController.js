@@ -4,7 +4,7 @@ import Driver from '../models/Driver.js';
 import Schedule from '../models/Schedule.js';
 import Jalur from '../models/Jalur.js';
 import Maintenance from '../models/Maintenance.js';
-import PassengerStat from '../models/PassengerStat.js'; // Mengganti PassengerStat
+import PassengerHistory from '../models/PassengerHistory.js'; // Mengganti PassengerStat
 import { Op, Sequelize } from 'sequelize';
 
 // FUNGSI INI SEKARANG MENGGABUNGKAN 'getLiveBuses' DAN 'getDashboardStats'
@@ -106,7 +106,7 @@ export const getDashboardData = async (req, res) => {
 export const getPassengerChartData = async (req, res) => {
     try {
         const today = new Date().toISOString().slice(0, 10);
-        const chartData = await PassengerStat.findAll({ // Perbaiki typo PassengerStat
+        const chartData = await PassengerHistory.findAll({ // Perbaiki typo PassengerStat
             attributes: [
                 [Sequelize.fn('HOUR', Sequelize.col('timestamp')), 'jam'],
                 [Sequelize.fn('SUM', Sequelize.col('jumlah_penumpang')), 'total_penumpang'],
