@@ -17,34 +17,39 @@ import maintenanceRoutes from "./api/routes/maintenanceRoutes.js";
 import scheduleRoutes from "./api/routes/scheduleRoutes.js";
 import dashboardRoutes from './api/routes/dashboardRoutes.js';
 
-// Import Socket & MQTT
+// Import Modul Lain
 import initSocket from './ws/socket.js';
-// Karena di Render server nyala 24 jam, MQTT aman untuk dijalankan:
+// Di Render server nyala 24 jam, jadi MQTT aman dinyalakan
 import "./mqtt/mqttClient.js"; 
 
 // --- Konfigurasi Awal ---
 dotenv.config();
 const app = express();
-const server = createServer(app); // Membuat HTTP Server
+
+// PENTING: Server HTTP dibuat di luar logika apapun
+const server = createServer(app); 
 
 // --- Middleware ---
 app.use(express.json());
-// Update CORS agar Frontend (dari domain manapun/spesifik) bisa akses
 app.use(cors({
-    origin: "*", // Ganti dengan URL Frontend Anda nanti untuk keamanan
-    methods: ["GET", "POST", "PUT", "DELETE"]
+    origin: "*", // Izinkan semua origin untuk development
+    methods: ["GET", "POST"]
 }));
 
-// --- Setup Database Associations ---
-try {
-    setupAssociations();
-    console.log('🔗 Hubungan antar model berhasil disetel.');
-} catch (err) {
-    console.error('Gagal setup asosiasi:', err);
-}
+// --- Setup Database ---
+const startDatabase = async () => {
+    try {
+        await setupAssociations();
+        await sequelize.authenticate();
+        console.log('✅ Koneksi database & asosiasi berhasil.');
+    } catch (err) {
+        console.error('❌ Gagal setup database:', err);
+    }
+};
+startDatabase();
 
 // --- Daftarkan Routes API ---
-app.get('/', (req, res) => res.send('Backend Bus Tracking is Live on Render! 🚀'));
+app.get('/', (req, res) => res.send('Backend Bus Tracking is Live! 🚀'));
 app.use('/api/auth', authRoutes);
 app.use('/api/drivers', driverRoutes);
 app.use('/api/bus', busRoutes);
@@ -54,31 +59,13 @@ app.use('/api/maintenance', maintenanceRoutes)
 app.use('/api/schedules', scheduleRoutes)
 app.use('/api/dashboard', dashboardRoutes);
 
-// --- SETUP WEBSOCKET ---
-// Wajib dipanggil sebelum server.listen
+// --- SETUP SOCKET.IO (WAJIB JALAN) ---
 initSocket(server);
 
-// --- START SERVER ---
-const startServer = async () => {
-    try {
-        // 1. Cek Koneksi DB
-        await sequelize.authenticate();
-        console.log('✅ Koneksi database berhasil.');
-        
-        // Opsional: Sync database (jangan pakai force: true di production!)
-        // await sequelize.sync(); 
+// --- JALANKAN SERVER (TANPA SYARAT IF) ---
+const PORT = process.env.PORT || 5000;
 
-        // 2. Jalankan Server
-        // Render akan otomatis menyuntikkan PORT ke process.env.PORT
-        const PORT = process.env.PORT || 5000;
-        
-        server.listen(PORT, '0.0.0.0', () => {
-            console.log(`🚀 Server berjalan di port ${PORT}`);
-        });
-
-    } catch (error) {
-        console.error('❌ Gagal menjalankan server:', error);
-    }
-};
-
-startServer();
+// Gunakan '0.0.0.0' agar bisa diakses dari luar container Render
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server berjalan di port ${PORT}`);
+});
