@@ -31,10 +31,18 @@ export const createSchedule = async (req, res) => {
 // Mendapatkan semua jadwal + update otomatis status
 // controller/scheduleController.js
 
+// controllers/scheduleController.js
+import Schedule from '../models/Schedule.js';
+import Bus from '../models/Bus.js';
+import Driver from '../models/Driver.js';
+import Jalur from '../models/Jalur.js';
+import dayjs from 'dayjs';
+
 export const getAllSchedules = async (req, res) => {
   try {
     const now = dayjs();
 
+    // 1. Ambil semua jadwal
     const schedules = await Schedule.findAll({
       include: [
         { model: Bus, as: 'bus' },
@@ -43,72 +51,92 @@ export const getAllSchedules = async (req, res) => {
       ],
     });
 
+    // 2. Loop untuk cek waktu dan sinkronisasi status
     for (const s of schedules) {
       const start = dayjs(`${s.tanggal} ${s.jam_mulai}`);
       const end = dayjs(`${s.tanggal} ${s.jam_selesai}`);
-      let newStatus = 'dijadwalkan';
 
-      // Validasi waktu
+      // Default status jadwal
+      let newScheduleStatus = 'dijadwalkan';
+
       if (!start.isValid() || !end.isValid()) continue;
 
-      // 1. Tentukan Status JADWAL (Sesuai ENUM Schedule)
+      // Logika Penentuan Status JADWAL
       if (now.isAfter(start) && now.isBefore(end)) {
-        newStatus = 'berjalan';
+        newScheduleStatus = 'berjalan';
       } else if (now.isAfter(end)) {
-        newStatus = 'selesai';
+        newScheduleStatus = 'selesai';
       }
 
-      // Update tabel Schedule jika berubah
-      if (s.status !== newStatus) {
-        s.status = newStatus;
+      // Update tabel JADWAL jika berubah
+      if (s.status !== newScheduleStatus) {
+        s.status = newScheduleStatus;
         await s.save();
       }
 
-      let busStatus = 'tersedia';   // Default jika jadwal selesai/belum mulai
-      let driverStatus = 'aktif';   // Default driver standby
+      // ---------------------------------------------------------
+      // PERBAIKAN UTAMA (MAPPING STATUS)
+      // Menerjemahkan status 'selesai' milik Jadwal 
+      // menjadi 'berhenti' milik Bus & Driver.
+      // ---------------------------------------------------------
 
-      if (newStatus === 'berjalan') {
-        // Sesuaikan kata 'beroperasi' dengan ENUM di model Bus.js Anda
-        busStatus = 'beroperasi';        
-        driverStatus = 'bertugas';
+      let targetBusStatus = 'berhenti';   // Default (Sesuai ENUM Bus)
+      let targetDriverStatus = 'berhenti'; // Default (Sesuai ENUM Driver)
+
+      if (newScheduleStatus === 'dijadwalkan') {
+        targetBusStatus = 'dijadwalkan';
+        targetDriverStatus = 'dijadwalkan';
+      } else if (newScheduleStatus === 'berjalan') {
+        targetBusStatus = 'berjalan';
+        targetDriverStatus = 'berjalan';
+      } else if (newScheduleStatus === 'selesai') {
+        // INI KUNCINYA: Jangan kirim 'selesai', tapi kirim 'berhenti'
+        targetBusStatus = 'berhenti';
+        targetDriverStatus = 'berhenti';
       }
 
-      // Update Bus (Hanya jika status berubah & ID valid)
-      if (s.bus_id && s.bus?.status !== busStatus) {
-        // Cek dulu apakah tabel Bus Anda punya kolom 'status'
+      // Update BUS (Hanya jika ID valid & status beda)
+      if (s.bus_id && s.bus?.status !== targetBusStatus) {
         try {
-          await Bus.update({ status: busStatus }, { where: { id_bus: s.bus_id } });
+          await Bus.update(
+            { status: targetBusStatus },
+            { where: { id_bus: s.bus_id } }
+          );
         } catch (error) {
-          console.error("Gagal update status Bus. Cek ENUM di model Bus:", error.message);
+          console.error(`Gagal update Bus ID ${s.bus_id}:`, error.message);
         }
       }
 
-      // Update Driver
-      if (s.driver_id && s.driver?.status !== driverStatus) {
+      // Update DRIVER (Hanya jika ID valid & status beda)
+      if (s.driver_id && s.driver?.status !== targetDriverStatus) {
         try {
-          await Driver.update({ status: driverStatus }, { where: { id_driver: s.driver_id } });
+          await Driver.update(
+            { status: targetDriverStatus },
+            { where: { id_driver: s.driver_id } }
+          );
         } catch (error) {
-          console.error("Gagal update status Driver. Cek ENUM di model Driver:", error.message);
+          console.error(`Gagal update Driver ID ${s.driver_id}:`, error.message);
         }
       }
     }
 
-    // Ambil data terbaru untuk dikirim ke frontend
+    // 3. Ambil data segar untuk dikirim ke frontend
     const updatedSchedules = await Schedule.findAll({
       include: [
         { model: Bus, as: 'bus' },
         { model: Driver, as: 'driver' },
         { model: Jalur, as: 'jalur' },
       ],
-      order: [['tanggal', 'DESC'], ['jam_mulai', 'ASC']] // Opsional: Biar rapi
+      order: [['tanggal', 'DESC'], ['jam_mulai', 'ASC']]
     });
 
     res.status(200).json({
       message: 'Berhasil mendapatkan semua jadwal',
       data: updatedSchedules,
     });
+
   } catch (err) {
-    console.error(err);
+    console.error("Error getAllSchedules:", err);
     res.status(500).json({ message: err.message });
   }
 };
