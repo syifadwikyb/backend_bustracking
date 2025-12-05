@@ -26,7 +26,7 @@ export const createJalur = async (req, res) => {
 export const getAllJalur = async (req, res) => {
     try {
         const jalur = await Jalur.findAll({
-            attributes: ['id_jalur', 'nama_jalur', 'kode_jalur', 'status']
+            attributes: ['id_jalur', 'nama_jalur', 'kode_jalur', 'status, rute_polyline'],
         });
         res.json(jalur);
     } catch (err) {
