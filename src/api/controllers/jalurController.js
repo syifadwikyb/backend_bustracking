@@ -37,7 +37,7 @@ export const getJalurById = async (req, res) => {
         const jalur = await Jalur.findByPk(req.params.id, {
             include: [{
                 model: Halte,
-                as: 'halte' // 'through' tidak diperlukan lagi
+                as: 'halte' 
             }]
         });
         if (!jalur) return res.status(404).json({ message: 'Jalur tidak ditemukan' });
@@ -48,7 +48,6 @@ export const getJalurById = async (req, res) => {
     }
 };
 
-// Fungsi update bisa dimodifikasi untuk menerima rute_polyline baru juga
 export const updateJalur = async (req, res) => {
     try {
         const jalur = await Jalur.findByPk(req.params.id);
