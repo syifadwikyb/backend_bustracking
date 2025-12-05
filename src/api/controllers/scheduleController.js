@@ -28,15 +28,6 @@ export const createSchedule = async (req, res) => {
   }
 };
 
-// Mendapatkan semua jadwal + update otomatis status
-// controller/scheduleController.js
-
-// controllers/scheduleController.js
-import Schedule from '../models/Schedule.js';
-import Bus from '../models/Bus.js';
-import Driver from '../models/Driver.js';
-import Jalur from '../models/Jalur.js';
-import dayjs from 'dayjs';
 
 export const getAllSchedules = async (req, res) => {
   try {
