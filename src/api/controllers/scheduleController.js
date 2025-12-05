@@ -29,6 +29,8 @@ export const createSchedule = async (req, res) => {
 };
 
 // Mendapatkan semua jadwal + update otomatis status
+// controller/scheduleController.js
+
 export const getAllSchedules = async (req, res) => {
   try {
     const now = dayjs();
@@ -46,39 +48,59 @@ export const getAllSchedules = async (req, res) => {
       const end = dayjs(`${s.tanggal} ${s.jam_selesai}`);
       let newStatus = 'dijadwalkan';
 
-      // Pastikan tanggal & jam valid
-      if (!start.isValid() || !end.isValid()) {
-        console.warn('Format waktu tidak valid untuk jadwal:', s.id_schedule);
-        continue;
-      }
+      // Validasi waktu
+      if (!start.isValid() || !end.isValid()) continue;
 
+      // 1. Tentukan Status JADWAL (Sesuai ENUM Schedule)
       if (now.isAfter(start) && now.isBefore(end)) {
         newStatus = 'berjalan';
       } else if (now.isAfter(end)) {
         newStatus = 'selesai';
       }
 
+      // Update tabel Schedule jika berubah
       if (s.status !== newStatus) {
         s.status = newStatus;
         await s.save();
       }
 
-      // Update status bus & driver jika ada
-      if (s.bus_id) {
-        await Bus.update({ status: newStatus }, { where: { id_bus: s.bus_id } });
+      let busStatus = 'tersedia';   // Default jika jadwal selesai/belum mulai
+      let driverStatus = 'aktif';   // Default driver standby
+
+      if (newStatus === 'berjalan') {
+        // Sesuaikan kata 'beroperasi' dengan ENUM di model Bus.js Anda
+        busStatus = 'beroperasi';        
+        driverStatus = 'bertugas';
       }
-      if (s.driver_id) {
-        await Driver.update({ status: newStatus }, { where: { id_driver: s.driver_id } });
+
+      // Update Bus (Hanya jika status berubah & ID valid)
+      if (s.bus_id && s.bus?.status !== busStatus) {
+        // Cek dulu apakah tabel Bus Anda punya kolom 'status'
+        try {
+          await Bus.update({ status: busStatus }, { where: { id_bus: s.bus_id } });
+        } catch (error) {
+          console.error("Gagal update status Bus. Cek ENUM di model Bus:", error.message);
+        }
+      }
+
+      // Update Driver
+      if (s.driver_id && s.driver?.status !== driverStatus) {
+        try {
+          await Driver.update({ status: driverStatus }, { where: { id_driver: s.driver_id } });
+        } catch (error) {
+          console.error("Gagal update status Driver. Cek ENUM di model Driver:", error.message);
+        }
       }
     }
 
-    // Ambil ulang jadwal setelah sinkronisasi
+    // Ambil data terbaru untuk dikirim ke frontend
     const updatedSchedules = await Schedule.findAll({
       include: [
         { model: Bus, as: 'bus' },
         { model: Driver, as: 'driver' },
         { model: Jalur, as: 'jalur' },
       ],
+      order: [['tanggal', 'DESC'], ['jam_mulai', 'ASC']] // Opsional: Biar rapi
     });
 
     res.status(200).json({
@@ -86,6 +108,7 @@ export const getAllSchedules = async (req, res) => {
       data: updatedSchedules,
     });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: err.message });
   }
 };
