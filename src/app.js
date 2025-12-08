@@ -33,7 +33,7 @@ const server = createServer(app);
 app.use(express.json());
 app.use(cors({
     origin: "*", // Izinkan semua origin untuk development
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST","PUT", "DELETE"]
 }));
 
 // --- Setup Database ---

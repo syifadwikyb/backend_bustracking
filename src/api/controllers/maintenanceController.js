@@ -42,7 +42,6 @@ export const getAllMaintenance = async (req, res) => {
             }
         });
 
-        // Tidak perlu hitung ulang status — langsung kirim apa adanya
         res.json(maintenances);
     } catch (err) {
         console.error('❌ Gagal mengambil data maintenance:', err);
