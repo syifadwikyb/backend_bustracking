@@ -1,20 +1,37 @@
 import Bus from '../models/Bus.js';
-// --- TAMBAHKAN IMPOR INI ---
 import Schedule from '../models/Schedule.js';
 import Driver from '../models/Driver.js';
 import Jalur from '../models/Jalur.js';
 import Maintenance from '../models/Maintenance.js';
 import { Op } from 'sequelize';
-// ----------------------------
 
-// Membuat bus baru (Tetap sama)
+// Import Dayjs & Plugin Timezone
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc.js';
+import timezone from 'dayjs/plugin/timezone.js';
+
+// Konfigurasi Dayjs
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+// --- CREATE BUS ---
 export const createBus = async (req, res) => {
-    const { plat_nomor, kode_bus, kapasitas, jenis_bus, foto, status } = req.body;
     try {
+        // Data teks otomatis masuk ke req.body berkat Multer
+        const { plat_nomor, kode_bus, kapasitas, jenis_bus, status } = req.body;
+
+        // Data file masuk ke req.file
+        const foto = req.file ? req.file.filename : null;
+
         const bus = await Bus.create({
-            plat_nomor, kode_bus, kapasitas, jenis_bus, foto,
-            status: status || 'berhenti' // Pastikan ada default jika kosong
+            plat_nomor,
+            kode_bus,
+            kapasitas,
+            jenis_bus,
+            foto,
+            status: status || 'berhenti' // Default status
         });
+
         res.status(201).json(bus);
     } catch (err) {
         if (err.name === 'SequelizeValidationError') {
@@ -24,77 +41,87 @@ export const createBus = async (req, res) => {
     }
 };
 
-// --- FUNGSI getAllBus SEKARANG JADI "PINTAR" ---
+// --- GET ALL BUS (LOGIKA STATUS DINAMIS) ---
 export const getAllBus = async (req, res) => {
     try {
-        const currentDate = new Date().toISOString().split("T")[0];
-        const currentTime = new Date().toTimeString().split(" ")[0];
+        // 1. Tentukan Waktu Sekarang (Zona Jakarta)
+        const now = dayjs().tz("Asia/Jakarta");
+        const currentDate = now.format("YYYY-MM-DD"); // "2023-12-09"
+        const currentTime = now.format("HH:mm:ss");   // "13:45:00"
 
-        // 1. Ambil SEMUA bus (termasuk relasinya, sama seperti di dashboard)
+        // 2. Ambil Bus + Jadwal Hari Ini + Maintenance Aktif
         const buses = await Bus.findAll({
             include: [
                 {
                     model: Schedule,
                     as: "jadwal",
-                    where: { tanggal: currentDate },
-                    required: false, // LEFT JOIN
+                    where: { tanggal: currentDate }, // Hanya ambil jadwal hari ini
+                    required: false, // LEFT JOIN (Bus tetap tampil meski tidak ada jadwal)
                     include: [
-                        { model: Driver, as: "driver", attributes: ["nama", "foto"] },
+                        { model: Driver, as: "driver", attributes: ["nama"] },
                         { model: Jalur, as: "jalur", attributes: ["nama_jalur"] },
                     ],
                 },
                 {
                     model: Maintenance,
                     as: "riwayat_perbaikan",
-                    where: { status: { [Op.not]: "selesai" } },
-                    required: false, // LEFT JOIN
+                    where: { status: { [Op.ne]: "selesai" } }, // Ambil maintenance yg belum selesai
+                    required: false,
                 },
             ],
-            order: [['plat_nomor', 'ASC']] // Urutkan berdasarkan plat nomor
+            order: [['plat_nomor', 'ASC']]
         });
 
-        // 2. Hitung status di logika (Read-Only, Cepat)
-        const liveBusData = buses.map((bus) => {
-            let highestPriority = 0;
-            let currentStatus = "berhenti"; 
+        // 3. Loop & Hitung Status Real-time
+        const processedBuses = await Promise.all(buses.map(async (bus) => {
+            let calculatedStatus = 'berhenti'; // Default
 
-            if (bus.riwayat_perbaikan?.length > 0) {
-                highestPriority = 4;
-            } 
-            else if (bus.jadwal?.length > 0) {
-                for (const j of bus.jadwal) {
-                    let scheduleStatusPriority = 0;
-                    if (j.jam_mulai <= currentTime && j.jam_selesai >= currentTime) {
-                        scheduleStatusPriority = 3; // berjalan
-                    } else if (j.jam_mulai > currentTime) {
-                        scheduleStatusPriority = 2; // dijadwalkan
+            // Prioritas 1: Maintenance
+            if (bus.riwayat_perbaikan && bus.riwayat_perbaikan.length > 0) {
+                calculatedStatus = 'dalam perbaikan';
+            }
+            // Prioritas 2 & 3: Jadwal
+            else if (bus.jadwal && bus.jadwal.length > 0) {
+                let isRunning = false;
+                let isScheduled = false;
+
+                for (const s of bus.jadwal) {
+                    // Jika jam sekarang ada di ANTARA jam mulai & selesai
+                    if (currentTime >= s.jam_mulai && currentTime <= s.jam_selesai) {
+                        isRunning = true;
+                        break; // Stop loop, prioritas tertinggi ditemukan
                     }
-                    if (scheduleStatusPriority > highestPriority) {
-                        highestPriority = scheduleStatusPriority;
+                    // Jika jam sekarang SEBELUM jam mulai (masa depan)
+                    if (currentTime < s.jam_mulai) {
+                        isScheduled = true;
                     }
+                }
+
+                if (isRunning) {
+                    calculatedStatus = 'berjalan';
+                } else if (isScheduled) {
+                    calculatedStatus = 'dijadwalkan';
                 }
             }
 
-            if (highestPriority === 4) currentStatus = 'dalam perbaikan';
-            else if (highestPriority === 3) currentStatus = 'berjalan';
-            else if (highestPriority === 2) currentStatus = 'dijadwalkan';
+            // 4. Sinkronisasi Database
+            if (bus.status !== calculatedStatus) {
+                await bus.update({ status: calculatedStatus });
+                bus.setDataValue('status', calculatedStatus);
+            }
 
-            const data = bus.toJSON();
-            data.status = currentStatus; // Set status yang benar
-            return data;
-        });
+            return bus;
+        }));
 
-        // 3. Kirim data yang sudah dihitung
-        res.json(liveBusData);
+        res.json(processedBuses);
 
     } catch (err) {
-        console.error("Error di getAllBus:", err.message);
+        console.error("Error getAllBus:", err);
         res.status(500).json({ message: err.message });
     }
 };
-// ------------------------------------------
 
-// Mendapatkan bus berdasarkan ID (Tetap sama)
+// --- GET BUS BY ID ---
 export const getBusById = async (req, res) => {
     try {
         const bus = await Bus.findByPk(req.params.id);
@@ -105,14 +132,26 @@ export const getBusById = async (req, res) => {
     }
 };
 
-// Memperbarui bus (Tetap sama)
+// --- UPDATE BUS ---
 export const updateBus = async (req, res) => {
     try {
         const bus = await Bus.findByPk(req.params.id);
         if (!bus) return res.status(404).json({ message: 'Bus tidak ditemukan' });
 
-        const { plat_nomor, kode_bus, kapasitas, jenis_bus, foto, status } = req.body;
-        await bus.update({ plat_nomor, kode_bus, kapasitas, jenis_bus, foto, status });
+        const { plat_nomor, kode_bus, kapasitas, jenis_bus, status } = req.body;
+
+        // Cek jika ada foto baru diupload (dari middleware multer)
+        const fotoFinal = req.file ? req.file.filename : bus.foto; // Pakai foto baru ATAU foto lama
+
+        await bus.update({
+            plat_nomor,
+            kode_bus,
+            kapasitas,
+            jenis_bus,
+            foto: fotoFinal,
+            status: status || bus.status // Gunakan status baru ATAU status lama
+        });
+
         res.json(bus);
     } catch (err) {
         if (err.name === 'SequelizeValidationError') {
@@ -122,7 +161,7 @@ export const updateBus = async (req, res) => {
     }
 };
 
-// Menghapus bus (Tetap sama)
+// --- DELETE BUS ---
 export const deleteBus = async (req, res) => {
     try {
         const bus = await Bus.findByPk(req.params.id);

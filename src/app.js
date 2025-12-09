@@ -32,9 +32,10 @@ const server = createServer(app);
 // --- Middleware ---
 app.use(express.json());
 app.use(cors({
-    origin: "*", // Izinkan semua origin untuk development
+    origin: "*",
     methods: ["GET", "POST","PUT", "DELETE"]
 }));
+app.use('/uploads', express.static('uploads'));
 
 // --- Setup Database ---
 const startDatabase = async () => {
