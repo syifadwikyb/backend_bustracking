@@ -3,6 +3,11 @@ import Bus from '../models/Bus.js';
 import Driver from '../models/Driver.js';
 import Jalur from '../models/Jalur.js';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc.js';
+import timezone from 'dayjs/plugin/timezone.js';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // Membuat jadwal baru
 export const createSchedule = async (req, res) => {
@@ -31,9 +36,10 @@ export const createSchedule = async (req, res) => {
 
 export const getAllSchedules = async (req, res) => {
   try {
-    const now = dayjs();
+    // 1. Tentukan Zona Waktu Target (WIB)
+    const timeZone = "Asia/Jakarta";
+    const now = dayjs().tz(timeZone); // Waktu sekarang di Jakarta
 
-    // 1. Ambil semua jadwal
     const schedules = await Schedule.findAll({
       include: [
         { model: Bus, as: 'bus' },
@@ -42,17 +48,20 @@ export const getAllSchedules = async (req, res) => {
       ],
     });
 
-    // 2. Loop untuk cek waktu dan sinkronisasi status
     for (const s of schedules) {
-      const start = dayjs(`${s.tanggal} ${s.jam_mulai}`);
-      const end = dayjs(`${s.tanggal} ${s.jam_selesai}`);
+      // 2. Format Tanggal agar aman (antisipasi format Date Object)
+      const dateStr = dayjs(s.tanggal).format('YYYY-MM-DD'); 
+      
+      // 3. Gabungkan Tanggal + Jam, lalu PAKSA baca sebagai waktu Jakarta
+      // Format string harus jelas agar tidak dianggap UTC
+      const start = dayjs.tz(`${dateStr} ${s.jam_mulai}`, "YYYY-MM-DD HH:mm:ss", timeZone);
+      const end = dayjs.tz(`${dateStr} ${s.jam_selesai}`, "YYYY-MM-DD HH:mm:ss", timeZone);
 
-      // Default status jadwal
       let newScheduleStatus = 'dijadwalkan';
 
       if (!start.isValid() || !end.isValid()) continue;
 
-      // Logika Penentuan Status JADWAL
+      // Logika Penentuan Status
       if (now.isAfter(start) && now.isBefore(end)) {
         newScheduleStatus = 'berjalan';
       } else if (now.isAfter(end)) {
@@ -65,53 +74,21 @@ export const getAllSchedules = async (req, res) => {
         await s.save();
       }
 
-      // ---------------------------------------------------------
-      // PERBAIKAN UTAMA (MAPPING STATUS)
-      // Menerjemahkan status 'selesai' milik Jadwal 
-      // menjadi 'berhenti' milik Bus & Driver.
-      // ---------------------------------------------------------
+      // --- Logika Update Bus & Driver (Sama seperti sebelumnya) ---
+      let targetStatus = 'berhenti';
+      if (newScheduleStatus === 'dijadwalkan') targetStatus = 'dijadwalkan';
+      if (newScheduleStatus === 'berjalan') targetStatus = 'berjalan';
+      if (newScheduleStatus === 'selesai') targetStatus = 'berhenti';
 
-      let targetBusStatus = 'berhenti';   // Default (Sesuai ENUM Bus)
-      let targetDriverStatus = 'berhenti'; // Default (Sesuai ENUM Driver)
-
-      if (newScheduleStatus === 'dijadwalkan') {
-        targetBusStatus = 'dijadwalkan';
-        targetDriverStatus = 'dijadwalkan';
-      } else if (newScheduleStatus === 'berjalan') {
-        targetBusStatus = 'berjalan';
-        targetDriverStatus = 'berjalan';
-      } else if (newScheduleStatus === 'selesai') {
-        // INI KUNCINYA: Jangan kirim 'selesai', tapi kirim 'berhenti'
-        targetBusStatus = 'berhenti';
-        targetDriverStatus = 'berhenti';
+      if (s.bus_id && s.bus?.status !== targetStatus) {
+          await Bus.update({ status: targetStatus }, { where: { id_bus: s.bus_id } });
       }
-
-      // Update BUS (Hanya jika ID valid & status beda)
-      if (s.bus_id && s.bus?.status !== targetBusStatus) {
-        try {
-          await Bus.update(
-            { status: targetBusStatus },
-            { where: { id_bus: s.bus_id } }
-          );
-        } catch (error) {
-          console.error(`Gagal update Bus ID ${s.bus_id}:`, error.message);
-        }
-      }
-
-      // Update DRIVER (Hanya jika ID valid & status beda)
-      if (s.driver_id && s.driver?.status !== targetDriverStatus) {
-        try {
-          await Driver.update(
-            { status: targetDriverStatus },
-            { where: { id_driver: s.driver_id } }
-          );
-        } catch (error) {
-          console.error(`Gagal update Driver ID ${s.driver_id}:`, error.message);
-        }
+      if (s.driver_id && s.driver?.status !== targetStatus) {
+          await Driver.update({ status: targetStatus }, { where: { id_driver: s.driver_id } });
       }
     }
 
-    // 3. Ambil data segar untuk dikirim ke frontend
+    // Ambil data terbaru untuk dikirim ke frontend
     const updatedSchedules = await Schedule.findAll({
       include: [
         { model: Bus, as: 'bus' },
