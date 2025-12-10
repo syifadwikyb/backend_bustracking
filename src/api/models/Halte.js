@@ -26,6 +26,10 @@ const Halte = sequelize.define('Halte', {
             model: 'jalur', // Merujuk ke tabel 'jalur'
             key: 'id_jalur'
         }
+    },
+    urutan: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
     }
 }, {
     tableName: 'halte',
