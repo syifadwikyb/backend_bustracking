@@ -1,108 +1,112 @@
 import Driver from '../models/Driver.js';
 import Schedule from '../models/Schedule.js';
 import { Op } from 'sequelize';
-import dayjs from 'dayjs'; // Pastikan Anda sudah install dayjs
 
-// Membuat driver baru
+// Import Dayjs & Plugin Timezone
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc.js';
+import timezone from 'dayjs/plugin/timezone.js';
+
+// Konfigurasi Timezone Jakarta
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+// --- CREATE DRIVER ---
 export const createDriver = async (req, res) => {
-    const { kode_driver, nama, tanggal_lahir, nomor_telepon, foto, status } = req.body;
-
     try {
+        // req.body berisi text, req.file berisi file (berkat middleware)
+        const { kode_driver, nama, tanggal_lahir, nomor_telepon, status } = req.body;
+
+        // Ambil nama file jika ada upload
+        const foto = req.file ? req.file.filename : null;
+
         const driver = await Driver.create({
             kode_driver,
             nama,
             tanggal_lahir,
             nomor_telepon,
             foto,
-            status: status || 'berhenti',
+            status: status || 'berhenti', // Default status berhenti
         });
         res.status(201).json(driver);
     } catch (err) {
+        console.error("Error createDriver:", err);
+        if (err.name === 'SequelizeValidationError') {
+            return res.status(400).json({ message: err.errors.map(e => e.message).join(', ') });
+        }
         res.status(500).json({ message: err.message });
     }
 };
 
+// --- GET ALL DRIVERS (DENGAN STATUS OTOMATIS) ---
 export const getDrivers = async (req, res) => {
     try {
-        const now = dayjs();
+        // 1. Tentukan Waktu Sekarang (Zona Jakarta)
+        const now = dayjs().tz("Asia/Jakarta");
         const currentDate = now.format('YYYY-MM-DD');
+        const currentTime = now.format('HH:mm:ss');
 
-        // 1. Ambil SEMUA driver, dan include jadwal HARI INI
-        const allDrivers = await Driver.findAll({
+        // 2. Ambil Driver + Jadwal Hari Ini
+        const drivers = await Driver.findAll({
             include: [{
                 model: Schedule,
                 as: 'jadwal',
                 where: { tanggal: currentDate },
-                required: false // PENTING: Lakukan LEFT JOIN
+                required: false // LEFT JOIN agar driver tanpa jadwal tetap muncul
             }],
             order: [['nama', 'ASC']]
         });
 
-        const updates = [];
-        const driversToReturn = [];
+        // 3. Loop untuk update status real-time
+        const processedDrivers = await Promise.all(drivers.map(async (driver) => {
+            let calculatedStatus = 'berhenti'; // Default
 
-        // 2. Loop melalui SETIAP driver
-        for (const driver of allDrivers) {
-            let highestPriority = 0; // 0 = berhenti
-            let finalStatus = 'berhenti'; // Default status
+            // Jika ada jadwal hari ini
+            if (driver.jadwal && driver.jadwal.length > 0) {
+                let isRunning = false;
+                let isScheduled = false;
 
-            // 3. Cek jadwal HARI INI untuk driver ini
-            // Jika driver.jadwal.length === 0, loop ini dilewati,
-            // dan status tetap 'berhenti' (ini adalah reset otomatis)
-            for (const s of driver.jadwal) {
-                const start = dayjs(`${s.tanggal} ${s.jam_mulai}`);
-                const end = dayjs(`${s.tanggal} ${s.jam_selesai}`);
-                let scheduleStatusPriority = 0; // 0 = berhenti
-
-                if (now.isAfter(start) && now.isBefore(end)) {
-                    scheduleStatusPriority = 3; // berjalan
-                } else if (now.isBefore(start)) {
-                    scheduleStatusPriority = 2; // dijadwalkan
+                for (const s of driver.jadwal) {
+                    // Cek apakah jam sekarang ada di rentang jadwal
+                    if (currentTime >= s.jam_mulai && currentTime <= s.jam_selesai) {
+                        isRunning = true;
+                        break; // Prioritas tertinggi
+                    }
+                    // Cek apakah jadwal akan datang (belum mulai)
+                    if (currentTime < s.jam_mulai) {
+                        isScheduled = true;
+                    }
                 }
-                // Jika now.isAfter(end), priority tetap 0 (berhenti)
 
-                if (scheduleStatusPriority > highestPriority) {
-                    highestPriority = scheduleStatusPriority;
-                }
+                if (isRunning) calculatedStatus = 'berjalan';
+                else if (isScheduled) calculatedStatus = 'dijadwalkan';
             }
 
-            // 4. Tentukan status final berdasarkan prioritas tertinggi
-            if (highestPriority === 3) {
-                finalStatus = 'berjalan';
-            } else if (highestPriority === 2) {
-                finalStatus = 'dijadwalkan';
-            }
-            // else: finalStatus tetap 'berhenti'
-
-            // 5. Cek jika status di DB berbeda, siapkan update
-            if (driver.status !== finalStatus) {
-                // Jalankan update di background
-                updates.push(
-                    Driver.update({ status: finalStatus }, { where: { id_driver: driver.id_driver } })
-                );
-                // Perbarui juga objek driver agar data yang dikirim fresh
-                driver.status = finalStatus;
+            // 4. Sinkronisasi Database jika status berubah
+            if (driver.status !== calculatedStatus) {
+                await driver.update({ status: calculatedStatus });
+                driver.setDataValue('status', calculatedStatus);
             }
 
-            // 6. Hapus data 'jadwal' dari output agar rapi
-            const driverData = driver.toJSON();
-            delete driverData.jadwal;
-            driversToReturn.push(driverData);
-        }
+            // Bersihkan data jadwal dari response (opsional, biar rapi)
+            const driverJson = driver.toJSON();
+            delete driverJson.jadwal;
 
-        // 7. Tunggu semua update selesai
-        await Promise.all(updates);
+            // Pastikan status di JSON response adalah hasil kalkulasi terbaru
+            driverJson.status = calculatedStatus;
 
-        // 8. Kirim data driver yang sudah di-sync
-        res.json(driversToReturn);
+            return driverJson;
+        }));
+
+        res.json(processedDrivers);
 
     } catch (err) {
-        console.error('Error getDrivers:', err.message);
+        console.error('Error getDrivers:', err);
         res.status(500).json({ message: err.message });
     }
 };
 
-// Mendapatkan driver berdasarkan ID
+// --- GET BY ID ---
 export const getDriverById = async (req, res) => {
     try {
         const driver = await Driver.findByPk(req.params.id);
@@ -113,30 +117,34 @@ export const getDriverById = async (req, res) => {
     }
 };
 
-// Memperbarui driver
+// --- UPDATE DRIVER ---
 export const updateDriver = async (req, res) => {
     try {
         const driver = await Driver.findByPk(req.params.id);
         if (!driver) return res.status(404).json({ message: 'Driver tidak ditemukan' });
 
-        // Hanya perbarui info personal, BUKAN status
-        const { kode_driver, nama, tanggal_lahir, nomor_telepon, foto } = req.body;
+        const { kode_driver, nama, tanggal_lahir, nomor_telepon, status } = req.body;
+
+        // Logika Foto: Jika ada upload baru pakai yang baru, jika tidak pakai yang lama
+        const fotoFinal = req.file ? req.file.filename : driver.foto;
 
         await driver.update({
             kode_driver,
             nama,
             tanggal_lahir,
             nomor_telepon,
-            foto,
+            foto: fotoFinal,
+            status: status || driver.status // Pertahankan status lama jika tidak dikirim
         });
 
         res.json(driver);
     } catch (err) {
+        console.error("Error updateDriver:", err);
         res.status(500).json({ message: err.message });
     }
 };
 
-// Menghapus driver
+// --- DELETE DRIVER ---
 export const deleteDriver = async (req, res) => {
     try {
         const driver = await Driver.findByPk(req.params.id);
