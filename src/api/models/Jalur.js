@@ -16,9 +16,9 @@ const Jalur = sequelize.define('Jalur', {
         unique: true,
     },
     status: {
-        type: DataTypes.ENUM('berjalan', 'berhenti'),
+        type: DataTypes.ENUM('aktif', 'tidak aktif'),
         allowNull: false,
-        defaultValue: 'berhenti'
+        defaultValue: 'aktif'
     },
     rute_polyline: {
         type: DataTypes.TEXT('long'),

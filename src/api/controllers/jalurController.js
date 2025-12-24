@@ -1,78 +1,86 @@
-import Jalur from '../models/Jalur.js';
-import Halte from '../models/Halte.js';
+import Jalur from "../models/Jalur.js";
+import Halte from "../models/Halte.js";
 
 export const createJalur = async (req, res) => {
-    const { nama_jalur, kode_jalur, rute_polyline, status } = req.body;
+  const { nama_jalur, kode_jalur, rute_polyline, status } = req.body;
 
-    if (!nama_jalur || !rute_polyline) {
-        return res.status(400).json({ message: 'Nama jalur dan rute_polyline (koordinat) dibutuhkan' });
-    }
+  if (!nama_jalur || !rute_polyline) {
+    return res
+      .status(400)
+      .json({ message: "Nama jalur dan rute_polyline dibutuhkan" });
+  }
 
-    try {
-        const jalur = await Jalur.create({
-            nama_jalur,
-            kode_jalur,
-            rute_polyline,
-            status
-        });
+  try {
+    const jalur = await Jalur.create({
+      nama_jalur,
+      kode_jalur,
+      rute_polyline,
+      status,
+    });
 
-        res.status(201).json(jalur);
-    } catch (error) {
-        console.error("Error saat membuat jalur:", error);
-        res.status(500).json({ message: 'Error pada server', error: error.message });
-    }
+    res.status(201).json(jalur);
+  } catch (error) {
+    console.error("Error saat membuat jalur:", error);
+    res
+      .status(500)
+      .json({ message: "Error pada server", error: error.message });
+  }
 };
 
 export const getAllJalur = async (req, res) => {
-    try {
-        const jalur = await Jalur.findAll(); 
-        res.json(jalur);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
+  try {
+    const jalur = await Jalur.findAll({
+      where: { status: "aktif" },
+    });
+    res.json(jalur);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
 
 export const getJalurById = async (req, res) => {
-    try {
-        const jalur = await Jalur.findByPk(req.params.id, {
-            include: [{
-                model: Halte,
-                as: 'halte' 
-            }]
-        });
-        if (!jalur) return res.status(404).json({ message: 'Jalur tidak ditemukan' });
+  try {
+    const jalur = await Jalur.findByPk(req.params.id, {
+      include: [
+        {
+          model: Halte,
+          as: "halte",
+        },
+      ],
+    });
+    if (!jalur)
+      return res.status(404).json({ message: "Jalur tidak ditemukan" });
 
-        res.json(jalur);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
+    res.json(jalur);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
 
 export const updateJalur = async (req, res) => {
-    try {
-        const jalur = await Jalur.findByPk(req.params.id);
-        if (!jalur) {
-            return res.status(404).json({ message: 'Jalur tidak ditemukan' });
-        }
-
-        await jalur.update(req.body);
-        res.json(jalur);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+  try {
+    const jalur = await Jalur.findByPk(req.params.id);
+    if (!jalur) {
+      return res.status(404).json({ message: "Jalur tidak ditemukan" });
     }
+
+    await jalur.update(req.body);
+    res.json(jalur);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
 
 export const deleteJalur = async (req, res) => {
-    try {
-        const jalur = await Jalur.findByPk(req.params.id);
-        if (!jalur) {
-            return res.status(404).json({ message: 'Jalur tidak ditemukan' });
-        }
-
-        await jalur.destroy();
-        res.json({ message: 'Jalur berhasil dihapus' });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+  try {
+    const jalur = await Jalur.findByPk(req.params.id);
+    if (!jalur) {
+      return res.status(404).json({ message: "Jalur tidak ditemukan" });
     }
-};
 
+    await jalur.destroy();
+    res.json({ message: "Jalur berhasil dihapus" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
