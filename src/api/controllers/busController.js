@@ -48,8 +48,8 @@ export const getAllBus = async (req, res) => {
   try {
     // 1. Tentukan Waktu Sekarang (Zona Jakarta)
     const now = dayjs().tz("Asia/Jakarta");
-    const currentDate = now.format("YYYY-MM-DD"); // "2023-12-09"
-    const currentTime = now.format("HH:mm:ss"); // "13:45:00"
+    const currentDate = now.format("YYYY-MM-DD"); 
+    const currentTime = now.format("HH:mm:ss");
 
     // 2. Ambil Bus + Jadwal Hari Ini + Maintenance Aktif
     const buses = await Bus.findAll({
@@ -117,11 +117,7 @@ export const getAllBus = async (req, res) => {
       })
     );
 
-    const activeOnly = processedBuses.filter(
-      (bus) => bus.status === "berjalan"
-    );
-
-    res.json(activeOnly);
+    res.json(processedBuses);
   } catch (err) {
     console.error("Error getAllBus:", err);
     res.status(500).json({ message: err.message });
