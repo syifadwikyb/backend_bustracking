@@ -48,7 +48,7 @@ export const getAllBus = async (req, res) => {
   try {
     // 1. Tentukan Waktu Sekarang (Zona Jakarta)
     const now = dayjs().tz("Asia/Jakarta");
-    const currentDate = now.format("YYYY-MM-DD"); 
+    const currentDate = now.format("YYYY-MM-DD");
     const currentTime = now.format("HH:mm:ss");
 
     // 2. Ambil Bus + Jadwal Hari Ini + Maintenance Aktif
@@ -77,24 +77,24 @@ export const getAllBus = async (req, res) => {
     // 3. Loop & Hitung Status Real-time
     const processedBuses = await Promise.all(
       buses.map(async (bus) => {
-        let calculatedStatus = "berhenti"; // Default
+        let calculatedStatus = "berhenti"; // Default Status (PENTING!)
 
         // Prioritas 1: Maintenance
         if (bus.riwayat_perbaikan && bus.riwayat_perbaikan.length > 0) {
           calculatedStatus = "dalam perbaikan";
         }
-        // Prioritas 2 & 3: Jadwal
+        // Prioritas 2: Cek Jadwal
         else if (bus.jadwal && bus.jadwal.length > 0) {
           let isRunning = false;
           let isScheduled = false;
 
           for (const s of bus.jadwal) {
-            // Jika jam sekarang ada di ANTARA jam mulai & selesai
+            // Cek jika jam sekarang masuk rentang jadwal
             if (currentTime >= s.jam_mulai && currentTime <= s.jam_selesai) {
               isRunning = true;
-              break; // Stop loop, prioritas tertinggi ditemukan
+              break; // Ketemu jadwal aktif, langsung stop
             }
-            // Jika jam sekarang SEBELUM jam mulai (masa depan)
+            // Cek jika ada jadwal masa depan
             if (currentTime < s.jam_mulai) {
               isScheduled = true;
             }
@@ -105,9 +105,11 @@ export const getAllBus = async (req, res) => {
           } else if (isScheduled) {
             calculatedStatus = "dijadwalkan";
           }
+          // Jika tidak running dan tidak scheduled (misal jadwal sudah lewat semua),
+          // maka calculatedStatus tetap "berhenti" (default di atas)
         }
 
-        // 4. Sinkronisasi Database
+        // 4. Update Database jika beda
         if (bus.status !== calculatedStatus) {
           await bus.update({ status: calculatedStatus });
           bus.setDataValue("status", calculatedStatus);
