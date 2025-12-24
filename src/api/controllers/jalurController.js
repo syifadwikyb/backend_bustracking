@@ -29,9 +29,7 @@ export const createJalur = async (req, res) => {
 
 export const getAllJalur = async (req, res) => {
   try {
-    const jalur = await Jalur.findAll({
-      where: { status: "aktif" },
-    });
+    const jalur = await Jalur.findAll();
     res.json(jalur);
   } catch (err) {
     res.status(500).json({ message: err.message });
