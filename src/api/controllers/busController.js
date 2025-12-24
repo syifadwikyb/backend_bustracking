@@ -46,21 +46,12 @@ export const createBus = async (req, res) => {
 // --- GET ALL BUS (LOGIKA STATUS DINAMIS) ---
 export const getAllBus = async (req, res) => {
   try {
-    const now = dayjs().tz("Asia/Jakarta");
-    const currentDate = now.format("YYYY-MM-DD");
-    const currentTime = now.format("HH:mm:ss");
-
     const buses = await Bus.findAll({
       include: [
         {
           model: Schedule,
           as: "jadwal",
-          where: { tanggal: currentDate },
           required: false,
-          include: [
-            { model: Driver, as: "driver", attributes: ["nama"] },
-            { model: Jalur, as: "jalur", attributes: ["nama_jalur"] },
-          ],
         },
         {
           model: Maintenance,
@@ -74,58 +65,22 @@ export const getAllBus = async (req, res) => {
 
     const processedBuses = await Promise.all(
       buses.map(async (bus) => {
-        // 1. Ambil status saat ini dari Database sebagai referensi
-        let calculatedStatus = bus.status; 
-        
-        // Flag logic
-        let isMaintenance = false;
-        let isScheduleRunning = false;
-        let isScheduleFuture = false;
+        let calculatedStatus = "berhenti";
 
-        // Cek Maintenance
-        if (bus.riwayat_perbaikan && bus.riwayat_perbaikan.length > 0) {
-          isMaintenance = true;
-        }
-
-        // Cek Jadwal
-        if (bus.jadwal && bus.jadwal.length > 0) {
-          for (const s of bus.jadwal) {
-            if (currentTime >= s.jam_mulai && currentTime <= s.jam_selesai) {
-              isScheduleRunning = true;
-              break; 
-            }
-            if (currentTime < s.jam_mulai) {
-              isScheduleFuture = true;
-            }
-          }
-        }
-
-        // --- LOGIKA PENENTUAN STATUS BARU ---
-
-        if (isMaintenance) {
-          // Prioritas 1: Kalau rusak, ya rusak.
+        // 1️⃣ Maintenance PRIORITAS TERTINGGI
+        if (bus.riwayat_perbaikan?.length > 0) {
           calculatedStatus = "dalam perbaikan";
-        } 
-        else if (isScheduleRunning) {
-          // Prioritas 2: Kalau jamnya cocok, otomatis BERJALAN.
-          calculatedStatus = "berjalan";
-        } 
-        else if (bus.status === 'berjalan') {
-          // ✅ PERBAIKAN DI SINI:
-          // Jika jam tidak cocok, TAPI status di DB sudah 'berjalan' (mungkin di-set manual atau via GPS),
-          // JANGAN diubah jadi berhenti. Biarkan tetap 'berjalan'.
-          calculatedStatus = "berjalan"; 
         }
-        else if (isScheduleFuture) {
-          // Prioritas 3: Kalau belum waktunya dan belum berjalan, berarti DIJADWALKAN.
+        // 2️⃣ Ada jadwal BERJALAN
+        else if (bus.jadwal?.some((j) => j.status === "berjalan")) {
+          calculatedStatus = "berjalan";
+        }
+        // 3️⃣ Ada jadwal DIJADWALKAN
+        else if (bus.jadwal?.some((j) => j.status === "dijadwalkan")) {
           calculatedStatus = "dijadwalkan";
-        } 
-        else {
-          // Sisanya: Berhenti (Selesai tugas / tidak ada jadwal)
-          calculatedStatus = "berhenti";
         }
 
-        // Update Database hanya jika status berubah
+        // Update hanya jika berubah
         if (bus.status !== calculatedStatus) {
           await bus.update({ status: calculatedStatus });
           bus.setDataValue("status", calculatedStatus);
