@@ -46,12 +46,24 @@ export const createBus = async (req, res) => {
 // --- GET ALL BUS (LOGIKA STATUS DINAMIS) ---
 export const getAllBus = async (req, res) => {
   try {
+    const now = dayjs().tz("Asia/Jakarta");
+    const today = now.format("YYYY-MM-DD");
+    const timeNow = now.format("HH:mm:ss");
+
     const buses = await Bus.findAll({
       include: [
         {
           model: Schedule,
           as: "jadwal",
+          where: {
+            tanggal: today,
+            status: { [Op.in]: ["berjalan", "dijadwalkan"] },
+          },
           required: false,
+          include: [
+            { model: Driver, as: "driver", attributes: ["nama"] },
+            { model: Jalur, as: "jalur", attributes: ["nama_jalur"] },
+          ],
         },
         {
           model: Maintenance,
@@ -63,36 +75,41 @@ export const getAllBus = async (req, res) => {
       order: [["plat_nomor", "ASC"]],
     });
 
-    const processedBuses = await Promise.all(
-      buses.map(async (bus) => {
-        let calculatedStatus = "berhenti";
+    const processedBuses = [];
 
-        // 1️⃣ Maintenance PRIORITAS TERTINGGI
-        if (bus.riwayat_perbaikan?.length > 0) {
-          calculatedStatus = "dalam perbaikan";
-        }
-        // 2️⃣ Ada jadwal BERJALAN
-        else if (bus.jadwal?.some((j) => j.status === "berjalan")) {
-          calculatedStatus = "berjalan";
-        }
-        // 3️⃣ Ada jadwal DIJADWALKAN
-        else if (bus.jadwal?.some((j) => j.status === "dijadwalkan")) {
-          calculatedStatus = "dijadwalkan";
-        }
+    for (const bus of buses) {
+      let calculatedStatus = "berhenti";
 
-        // Update hanya jika berubah
-        if (bus.status !== calculatedStatus) {
-          await bus.update({ status: calculatedStatus });
-          bus.setDataValue("status", calculatedStatus);
-        }
+      // PRIORITAS 1 — MAINTENANCE
+      if (bus.riwayat_perbaikan?.length > 0) {
+        calculatedStatus = "dalam perbaikan";
+      }
 
-        return bus;
-      })
-    );
+      // PRIORITAS 2 — JADWAL
+      else if (bus.jadwal?.length > 0) {
+        const running = bus.jadwal.some(
+          (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai
+        );
+
+        const scheduled = bus.jadwal.some((j) => timeNow < j.jam_mulai);
+
+        if (running) calculatedStatus = "berjalan";
+        else if (scheduled) calculatedStatus = "dijadwalkan";
+      }
+
+      // SINKRONISASI DB
+      if (bus.status !== calculatedStatus) {
+        await bus.update({ status: calculatedStatus });
+      }
+
+      bus.setDataValue("status", calculatedStatus);
+
+      processedBuses.push(bus);
+    }
 
     res.json(processedBuses);
   } catch (err) {
-    console.error("Error getAllBus:", err);
+    console.error("getAllBus error:", err);
     res.status(500).json({ message: err.message });
   }
 };

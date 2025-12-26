@@ -63,7 +63,6 @@ client.on("message", async (topic, message) => {
                 latitude: latitude,
                 longitude: longitude,
                 terakhir_dilihat: now,
-                status: 'berjalan',
                 next_halte_id: validNextHalteId,
                 distance_to_next_halte: jarakMeter,
                 eta_seconds: estimasiDetik,
