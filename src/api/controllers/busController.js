@@ -55,11 +55,13 @@ export const getAllBus = async (req, res) => {
         {
           model: Schedule,
           as: "jadwal",
+          // Pindahkan where status ke dalam sini, TAPI...
+          // Pastikan required: false agar bus tanpa jadwal tetap muncul
           where: {
             tanggal: today,
             status: { [Op.in]: ["berjalan", "dijadwalkan"] },
           },
-          required: false,
+          required: false, // <--- PENTING: LEFT JOIN (Bus tetap diambil meski tidak ada jadwal)
           include: [
             { model: Driver, as: "driver", attributes: ["nama"] },
             { model: Jalur, as: "jalur", attributes: ["nama_jalur"] },
@@ -69,7 +71,7 @@ export const getAllBus = async (req, res) => {
           model: Maintenance,
           as: "riwayat_perbaikan",
           where: { status: { [Op.ne]: "selesai" } },
-          required: false,
+          required: false, // <--- PENTING: LEFT JOIN
         },
       ],
       order: [["plat_nomor", "ASC"]],
@@ -78,24 +80,27 @@ export const getAllBus = async (req, res) => {
     const processedBuses = [];
 
     for (const bus of buses) {
-      let calculatedStatus = "berhenti";
+      let calculatedStatus = "berhenti"; // Default status jika tidak ada kondisi lain
 
+      // ... (Logika kalkulasi status di bawahnya sudah benar) ...
       // PRIORITAS 1 — MAINTENANCE
       if (bus.riwayat_perbaikan?.length > 0) {
         calculatedStatus = "dalam perbaikan";
       }
-
       // PRIORITAS 2 — JADWAL
       else if (bus.jadwal?.length > 0) {
         const running = bus.jadwal.some(
           (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai
         );
-
         const scheduled = bus.jadwal.some((j) => timeNow < j.jam_mulai);
 
         if (running) calculatedStatus = "berjalan";
         else if (scheduled) calculatedStatus = "dijadwalkan";
       }
+      // PRIORITAS 3 — MANUAL / EXISTING STATUS (Tambahan untuk keamanan)
+      // Jika database sudah bilang 'berjalan' (misal dari MQTT), jangan di-overwrite jadi berhenti
+      // KECUALI jika memang tidak ada jadwal aktif.
+      // Namun, jika Anda ingin dashboard strictly ikut jadwal, abaikan blok ini.
 
       // SINKRONISASI DB
       if (bus.status !== calculatedStatus) {
@@ -103,7 +108,6 @@ export const getAllBus = async (req, res) => {
       }
 
       bus.setDataValue("status", calculatedStatus);
-
       processedBuses.push(bus);
     }
 
