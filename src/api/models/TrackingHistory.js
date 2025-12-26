@@ -26,7 +26,6 @@ const TrackingHistory = db.define(
       type: DataTypes.INTEGER,
       defaultValue: 0,
     },
-    // ➕ TAMBAHKAN KOLOM INI
     passenger_count: {
       type: DataTypes.INTEGER,
       defaultValue: 0,

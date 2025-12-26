@@ -16,14 +16,10 @@ export default function initSocket(server) {
     });
 }
 
+// Kita hanya butuh satu fungsi ini sekarang
 export function emitBusUpdate(data) {
     if (io) {
+        // Data yang dikirim: { bus_id, lat, long, speed, passenger_count, eta, status }
         io.emit("bus_location", data);
-    }
-}
-
-export function emitPassengerUpdate(data) {
-    if (io) {
-        io.emit("passenger_update", data);
     }
 }
