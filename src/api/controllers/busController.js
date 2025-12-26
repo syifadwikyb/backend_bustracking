@@ -50,18 +50,14 @@ export const getAllBus = async (req, res) => {
     const today = now.format("YYYY-MM-DD");
     const timeNow = now.format("HH:mm:ss");
 
+    // 1. Ambil SEMUA data bus (gunakan required: false agar Left Join)
     const buses = await Bus.findAll({
       include: [
         {
           model: Schedule,
           as: "jadwal",
-          // Pindahkan where status ke dalam sini, TAPI...
-          // Pastikan required: false agar bus tanpa jadwal tetap muncul
-          where: {
-            tanggal: today,
-            status: { [Op.in]: ["berjalan", "dijadwalkan"] },
-          },
-          required: false, // <--- PENTING: LEFT JOIN (Bus tetap diambil meski tidak ada jadwal)
+          where: { tanggal: today },
+          required: false, // PENTING: Agar bus tanpa jadwal tetap muncul
           include: [
             { model: Driver, as: "driver", attributes: ["nama"] },
             { model: Jalur, as: "jalur", attributes: ["nama_jalur"] },
@@ -71,7 +67,7 @@ export const getAllBus = async (req, res) => {
           model: Maintenance,
           as: "riwayat_perbaikan",
           where: { status: { [Op.ne]: "selesai" } },
-          required: false, // <--- PENTING: LEFT JOIN
+          required: false,
         },
       ],
       order: [["plat_nomor", "ASC"]],
@@ -80,33 +76,49 @@ export const getAllBus = async (req, res) => {
     const processedBuses = [];
 
     for (const bus of buses) {
-      let calculatedStatus = "berhenti"; // Default status jika tidak ada kondisi lain
+      // Status default awal (jika tidak ada kondisi lain)
+      let calculatedStatus = "berhenti";
 
-      // ... (Logika kalkulasi status di bawahnya sudah benar) ...
-      // PRIORITAS 1 — MAINTENANCE
-      if (bus.riwayat_perbaikan?.length > 0) {
-        calculatedStatus = "dalam perbaikan";
-      }
-      // PRIORITAS 2 — JADWAL
-      else if (bus.jadwal?.length > 0) {
-        const running = bus.jadwal.some(
+      // Cek flag kondisi
+      const isMaintenance = bus.riwayat_perbaikan?.length > 0;
+      let isRunningBySchedule = false;
+      let isScheduledFuture = false;
+
+      if (bus.jadwal?.length > 0) {
+        isRunningBySchedule = bus.jadwal.some(
           (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai
         );
-        const scheduled = bus.jadwal.some((j) => timeNow < j.jam_mulai);
-
-        if (running) calculatedStatus = "berjalan";
-        else if (scheduled) calculatedStatus = "dijadwalkan";
+        isScheduledFuture = bus.jadwal.some((j) => timeNow < j.jam_mulai);
       }
-      // PRIORITAS 3 — MANUAL / EXISTING STATUS (Tambahan untuk keamanan)
-      // Jika database sudah bilang 'berjalan' (misal dari MQTT), jangan di-overwrite jadi berhenti
-      // KECUALI jika memang tidak ada jadwal aktif.
-      // Namun, jika Anda ingin dashboard strictly ikut jadwal, abaikan blok ini.
 
-      // SINKRONISASI DB
+      // --- LOGIKA PRIORITAS STATUS ---
+
+      if (isMaintenance) {
+        // Prioritas 1: Sedang Maintenance
+        calculatedStatus = "dalam perbaikan";
+      } else if (isRunningBySchedule) {
+        // Prioritas 2: Jadwalnya pas jam sekarang
+        calculatedStatus = "berjalan";
+      } else if (bus.status === "berjalan") {
+        // ✅ FIX UTAMA: MANUAL OVERRIDE / BROKER OFF
+        // Jika jadwal tidak cocok, TAPI di database statusnya sudah 'berjalan'
+        // (entah diset manual atau sisa data lama), JANGAN DIUBAH.
+        // Biarkan tetap 'berjalan' agar sinkron dengan daftar bus.
+        calculatedStatus = "berjalan";
+      } else if (isScheduledFuture) {
+        // Prioritas 3: Jadwal masa depan
+        calculatedStatus = "dijadwalkan";
+      } else {
+        // Prioritas 4: Tidak ada jadwal / jadwal sudah lewat
+        calculatedStatus = "berhenti";
+      }
+
+      // Update DB hanya jika status hasil hitungan berbeda dengan yang ada
       if (bus.status !== calculatedStatus) {
         await bus.update({ status: calculatedStatus });
       }
 
+      // Set value untuk dikirim ke frontend
       bus.setDataValue("status", calculatedStatus);
       processedBuses.push(bus);
     }
