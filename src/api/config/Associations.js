@@ -42,7 +42,6 @@ function setupAssociations() {
 
   Driver.hasMany(Schedule, {
     foreignKey: 'driver_id',
-    // --- PERBAIKAN ---
     as: 'jadwal', // Diubah dari 'jadwal_driver'
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE'

@@ -2,136 +2,100 @@ import mqtt from "mqtt";
 import { emitBusUpdate } from "../ws/socket.js";
 import Bus from "../api/models/Bus.js";
 import Halte from "../api/models/Halte.js";
+import PassengerHistory from "../api/models/PassengerHistory.js";
 import TrackingHistory from "../api/models/TrackingHistory.js";
 
-// ============================
-// HELPER: HITUNG JARAK (METER)
-// ============================
 function calculateDistance(lat1, lon1, lat2, lon2) {
   if (lat1 === lat2 && lon1 === lon2) return 0;
-
-  const R = 6371e3; // meter
+  const R = 6371e3;
   const φ1 = (lat1 * Math.PI) / 180;
   const φ2 = (lat2 * Math.PI) / 180;
   const Δφ = ((lat2 - lat1) * Math.PI) / 180;
   const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-  const a =
-    Math.sin(Δφ / 2) ** 2 +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
-
+  const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c);
 }
 
-// ============================
-// MQTT CONNECTION
-// ============================
 const client = mqtt.connect("mqtt://broker.hivemq.com:1883");
 
 client.on("connect", () => {
   console.log("✅ Terhubung ke MQTT Broker");
-  client.subscribe("syifa/tracking/bus/#", () => {
-    console.log("📡 Subscribe: syifa/tracking/bus/#");
-  });
+  client.subscribe("syifa/tracking/bus/#");
 });
 
-// ============================
-// MQTT MESSAGE HANDLER
-// ============================
 client.on("message", async (topic, message) => {
   const topicParts = topic.split("/");
-  // Format: syifa/tracking/bus/{id}/location
   if (topicParts.length < 5) return;
 
-  const bus_id = Number(topicParts[3]);
+  const bus_id = parseInt(topicParts[3]);
   const messageType = topicParts[4];
 
-  if (!Number.isInteger(bus_id)) return;
+  if (isNaN(bus_id)) return;
 
   try {
-    const data = JSON.parse(message.toString());
+    const payload = message.toString();
+    const data = JSON.parse(payload);
     const now = new Date();
 
-    // ============================
-    // LOCATION MESSAGE
-    // ============================
     if (messageType === "location") {
       const { latitude, longitude, speed, passenger_count } = data;
 
-      if (latitude == null || longitude == null) return;
+      const currentBus = await Bus.findByPk(bus_id);
+      const currentPassengerDB = currentBus ? currentBus.penumpang : 0;
+      
+      const PassengerCount = (passenger_count !== undefined) 
+        ? passenger_count 
+        : currentPassengerDB;
 
-      // 1️⃣ Ambil data bus saat ini
-      const bus = await Bus.findByPk(bus_id);
-      if (!bus) {
-        console.warn(`⚠️ Bus ${bus_id} tidak ditemukan`);
-        return;
-      }
-
-      // 2️⃣ Tentukan jumlah penumpang final
-      const finalPassengerCount = Number.isInteger(passenger_count)
-        ? passenger_count
-        : bus.penumpang;
-
-      // 3️⃣ Hitung jarak & ETA ke halte (contoh: halte id 1)
-      const nextHalteId = 1;
+      const nextHalteId = 1; 
       let jarakMeter = 0;
       let etaDetik = 0;
-
       const halte = await Halte.findByPk(nextHalteId);
       if (halte) {
-        jarakMeter = calculateDistance(
-          latitude,
-          longitude,
-          halte.latitude,
-          halte.longitude
-        );
-        const speedMps = (speed && speed > 1 ? speed : 20) / 3.6;
+        jarakMeter = calculateDistance(latitude, longitude, halte.latitude, halte.longitude);
+        const speedMps = (speed > 1 ? speed : 20) / 3.6;
         etaDetik = Math.round(jarakMeter / speedMps);
       }
 
-      // 4️⃣ UPDATE BUS (REALTIME STATE)
       await Bus.update(
         {
           latitude,
           longitude,
           speed: speed || 0,
-          penumpang: finalPassengerCount,
+          penumpang: PassengerCount,
           terakhir_dilihat: now,
           next_halte_id: nextHalteId,
           distance_to_next_halte: jarakMeter,
           eta_seconds: etaDetik,
-          status: "berjalan",
+          status: 'berjalan'
         },
         { where: { id_bus: bus_id } }
       );
 
-      // 5️⃣ INSERT TRACKING HISTORY (LOG)
       await TrackingHistory.create({
         bus_id,
         latitude,
         longitude,
         speed: speed || 0,
-        passenger_count: finalPassengerCount,
+        passenger_count: PassengerCount,
         created_at: now,
         updated_at: now,
       });
 
-      // 6️⃣ EMIT SOCKET KE FRONTEND
+      // ✅ EMIT LENGKAP KE FRONTEND
       emitBusUpdate({
         bus_id,
         latitude,
         longitude,
-        speed: speed || 0,
-        passenger_count: finalPassengerCount,
+        speed,
+        passenger_count: PassengerCount, // Pastikan ini ada!
         eta_seconds: etaDetik,
-        status: "berjalan",
         updated_at: now,
+        status: 'berjalan'
       });
 
-      console.log(
-        `📍 Bus ${bus_id} | Penumpang: ${finalPassengerCount}`
-      );
+      console.log(`📍 Bus ${bus_id} Updated | Penumpang: ${PassengerCount}`);
     }
   } catch (err) {
     console.error("❌ MQTT Error:", err.message);
