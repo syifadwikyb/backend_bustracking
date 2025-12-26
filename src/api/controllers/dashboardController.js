@@ -4,7 +4,6 @@ import Driver from '../models/Driver.js';
 import Schedule from '../models/Schedule.js';
 import Jalur from '../models/Jalur.js';
 import Maintenance from '../models/Maintenance.js';
-import PassengerHistory from '../models/PassengerHistory.js'; // Mengganti PassengerStat
 import { Op, Sequelize } from 'sequelize';
 
 // FUNGSI INI SEKARANG MENGGABUNGKAN 'getLiveBuses' DAN 'getDashboardStats'
