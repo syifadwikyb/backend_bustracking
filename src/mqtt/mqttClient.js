@@ -48,17 +48,22 @@ client.on("message", async (topic, message) => {
   if (isNaN(bus_id)) return;
 
   try {
-    const data = JSON.parse(message.toString());
+    const payload = message.toString();
+    const data = JSON.parse(payload);
     const now = new Date();
 
     // ============================
-    // LOCATION UPDATE
+    // 1. LOCATION UPDATE
     // ============================
     if (messageType === "location") {
       const { latitude, longitude, speed } = data;
 
-      // sementara: halte tujuan dummy
-      const nextHalteId = 1;
+      // Ambil data bus saat ini untuk mendapatkan jumlah penumpang terakhir
+      const currentBus = await Bus.findByPk(bus_id);
+      const currentPassengerCount = currentBus ? currentBus.penumpang : 0;
+
+      // --- Logika Jarak & Halte ---
+      const nextHalteId = 1; // Logic dinamis bisa ditambahkan disini
       let jarakMeter = 0;
       let etaDetik = 0;
 
@@ -74,6 +79,7 @@ client.on("message", async (topic, message) => {
         etaDetik = Math.round(jarakMeter / speedMps);
       }
 
+      // --- Update Tabel Bus ---
       const [updated] = await Bus.update(
         {
           latitude,
@@ -83,9 +89,7 @@ client.on("message", async (topic, message) => {
           distance_to_next_halte: jarakMeter,
           eta_seconds: etaDetik,
         },
-        {
-          where: { id_bus: bus_id },
-        }
+        { where: { id_bus: bus_id } }
       );
 
       if (!updated) {
@@ -93,64 +97,98 @@ client.on("message", async (topic, message) => {
         return;
       }
 
-      // ===== Tracking History =====
-      const history = await TrackingHistory.findOne({
-        where: { bus_id },
+      // --- Simpan Tracking History (Termasuk Penumpang) ---
+      // Kita gunakan .create() agar tersimpan sebagai history perjalanan (log)
+      // Jika ingin hanya menyimpan 1 history terakhir, gunakan logika findOne/update seperti sebelumnya.
+      await TrackingHistory.create({
+        bus_id,
+        latitude,
+        longitude,
+        speed: speed || 0,
+        passenger_count: currentPassengerCount, // 👈 Masukkan data penumpang ke history lokasi
+        created_at: now,
+        updated_at: now,
       });
 
-      if (history) {
-        await history.update({
-          latitude,
-          longitude,
-          speed: speed || 0,
-          updated_at: now,
-        });
-      } else {
-        await TrackingHistory.create({
-          bus_id,
-          latitude,
-          longitude,
-          speed: speed || 0,
-        });
-      }
-
+      // --- Emit Socket ---
       emitBusUpdate({
         bus_id,
         latitude,
         longitude,
         speed,
+        passenger_count: currentPassengerCount,
         eta_seconds: etaDetik,
         updated_at: now,
       });
 
-      console.log(`📍 Bus ${bus_id} bergerak`);
+      console.log(
+        `📍 Bus ${bus_id} bergerak | Penumpang: ${currentPassengerCount}`
+      );
     }
 
     // ============================
-    // PASSENGER UPDATE
+    // 2. PASSENGER UPDATE (AI DETECT)
     // ============================
-    if (messageType === "passengers") {
-      const { passenger_count } = data;
+    // Payload AI diharapkan: { "action": "in" } atau { "action": "out" }
+    else if (messageType === "passengers") {
+      const bus = await Bus.findByPk(bus_id);
+      if (!bus) return;
 
-      await Bus.update(
-        {
-          penumpang: passenger_count,
-          terakhir_dilihat: now,
-        },
-        { where: { id_bus: bus_id } }
-      );
+      let newPassengerCount = bus.penumpang;
+      let changeAmount = 0;
 
+      // Logika Tambah/Kurang Penumpang
+      if (data.action === "in") {
+        newPassengerCount += 1;
+        changeAmount = 1;
+      } else if (data.action === "out") {
+        newPassengerCount -= 1;
+        changeAmount = -1;
+      } else if (data.passenger_count !== undefined) {
+        // Fallback jika hardware mengirim total langsung
+        newPassengerCount = data.passenger_count;
+      }
+
+      // Validasi agar tidak minus
+      if (newPassengerCount < 0) newPassengerCount = 0;
+
+      // 1. Update Tabel Bus (Data Real-time)
+      await bus.update({
+        penumpang: newPassengerCount,
+        terakhir_dilihat: now,
+      });
+
+      // 2. Simpan Riwayat Penumpang (Untuk Statistik Naik/Turun)
       await PassengerHistory.create({
         bus_id,
-        jumlah_penumpang: passenger_count,
+        jumlah_penumpang: newPassengerCount,
+        // (Opsional) Anda bisa menambahkan kolom 'perubahan' di tabel PassengerHistory
+        // untuk mencatat +1 atau -1 jika diperlukan untuk analitik
+        created_at: now,
       });
 
+      // 3. Simpan Tracking History (Snapshot saat penumpang naik/turun)
+      // Ini penting agar di peta history terlihat di titik mana penumpang berubah
+      await TrackingHistory.create({
+        bus_id,
+        latitude: bus.latitude, // Gunakan lokasi terakhir bus
+        longitude: bus.longitude,
+        speed: 0, // Biasanya bus berhenti saat penumpang naik/turun
+        passenger_count: newPassengerCount, // 👈 Data baru tersimpan di history
+        created_at: now,
+        updated_at: now,
+      });
+
+      // 4. Emit Socket ke Frontend
       emitPassengerUpdate({
         id_bus: bus_id,
-        passenger_count,
+        passenger_count: newPassengerCount,
+        action: data.action, // Kirim info "in" atau "out" agar frontend bisa kasih animasi
       });
 
-      console.log(`👥 Bus ${bus_id} penumpang: ${passenger_count}`);
+      console.log(
+        `👥 Bus ${bus_id} Passenger: ${data.action} | Total: ${newPassengerCount}`
+      );
     }
   } catch (err) {
     console.error("❌ MQTT Error:", err.message);
