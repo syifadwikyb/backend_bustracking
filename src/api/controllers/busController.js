@@ -17,47 +17,35 @@ dayjs.extend(timezone);
 // --- CREATE BUS ---
 export const createBus = async (req, res) => {
   try {
-    // Data teks otomatis masuk ke req.body berkat Multer
     const { plat_nomor, kode_bus, kapasitas, jenis_bus, status } = req.body;
-
-    // Data file masuk ke req.file
     const foto = req.file ? req.file.filename : null;
 
     const bus = await Bus.create({
-      plat_nomor,
-      kode_bus,
-      kapasitas,
-      jenis_bus,
-      foto,
-      status: status || "berhenti", // Default status
+      plat_nomor, kode_bus, kapasitas, jenis_bus, foto,
+      status: status || "berhenti",
     });
 
     res.status(201).json(bus);
   } catch (err) {
-    if (err.name === "SequelizeValidationError") {
-      return res
-        .status(400)
-        .json({ message: err.errors.map((e) => e.message).join(", ") });
-    }
     res.status(500).json({ message: err.message });
   }
 };
 
-// --- GET ALL BUS (LOGIKA STATUS DINAMIS) ---
+// --- GET ALL BUS (LOGIKA PENENTU UTAMA) ---
 export const getAllBus = async (req, res) => {
   try {
     const now = dayjs().tz("Asia/Jakarta");
     const today = now.format("YYYY-MM-DD");
     const timeNow = now.format("HH:mm:ss");
 
-    // 1. Ambil SEMUA data bus (gunakan required: false agar Left Join)
+    // 1. Ambil Bus + Jadwal Hari Ini
     const buses = await Bus.findAll({
       include: [
         {
           model: Schedule,
           as: "jadwal",
           where: { tanggal: today },
-          required: false, // PENTING: Agar bus tanpa jadwal tetap muncul
+          required: false, // Left Join (Bus tanpa jadwal tetap muncul)
           include: [
             { model: Driver, as: "driver", attributes: ["nama"] },
             { model: Jalur, as: "jalur", attributes: ["nama_jalur"] },
@@ -76,49 +64,50 @@ export const getAllBus = async (req, res) => {
     const processedBuses = [];
 
     for (const bus of buses) {
-      // Status default awal (jika tidak ada kondisi lain)
-      let calculatedStatus = "berhenti";
+      // --- LOGIKA STATUS BARU (STRICT SCHEDULE) ---
+      let calculatedStatus = "berhenti"; // Default
 
-      // Cek flag kondisi
+      // Cek Kondisi
       const isMaintenance = bus.riwayat_perbaikan?.length > 0;
-      let isRunningBySchedule = false;
-      let isScheduledFuture = false;
+      let hasActiveSchedule = false;
+      let hasFutureSchedule = false;
 
       if (bus.jadwal?.length > 0) {
-        isRunningBySchedule = bus.jadwal.some(
+        // Cek apakah jam SEKARANG masuk dalam rentang jadwal
+        hasActiveSchedule = bus.jadwal.some(
           (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai
         );
-        isScheduledFuture = bus.jadwal.some((j) => timeNow < j.jam_mulai);
+        // Cek apakah ada jadwal NANTI (di masa depan hari ini)
+        // Syarat: Belum masuk jam mulai, DAN tidak sedang ada jadwal aktif
+        hasFutureSchedule = bus.jadwal.some((j) => timeNow < j.jam_mulai);
       }
 
-      // --- LOGIKA PRIORITAS STATUS ---
-
+      // --- HIERARKI PENENTUAN STATUS ---
+      // 1. Prioritas Tertinggi: Maintenance
       if (isMaintenance) {
-        // Prioritas 1: Sedang Maintenance
         calculatedStatus = "dalam perbaikan";
-      } else if (isRunningBySchedule) {
-        // Prioritas 2: Jadwalnya pas jam sekarang
+      }
+      // 2. Prioritas Kedua: Sedang dalam jam operasional
+      else if (hasActiveSchedule) {
         calculatedStatus = "berjalan";
-      } else if (bus.status === "berjalan") {
-        // ✅ FIX UTAMA: MANUAL OVERRIDE / BROKER OFF
-        // Jika jadwal tidak cocok, TAPI di database statusnya sudah 'berjalan'
-        // (entah diset manual atau sisa data lama), JANGAN DIUBAH.
-        // Biarkan tetap 'berjalan' agar sinkron dengan daftar bus.
-        calculatedStatus = "berjalan";
-      } else if (isScheduledFuture) {
-        // Prioritas 3: Jadwal masa depan
+      }
+      // 3. Prioritas Ketiga: Ada jadwal nanti (tapi belum mulai)
+      else if (hasFutureSchedule) {
         calculatedStatus = "dijadwalkan";
-      } else {
-        // Prioritas 4: Tidak ada jadwal / jadwal sudah lewat
+      }
+      // 4. Sisanya: Berhenti (Jadwal sudah lewat atau tidak ada jadwal)
+      else {
         calculatedStatus = "berhenti";
       }
 
-      // Update DB hanya jika status hasil hitungan berbeda dengan yang ada
+      // --- UPDATE DATABASE OTOMATIS ---
+      // Jika status hasil hitungan beda dengan database, update database!
+      // Ini penting agar Dashboard Stats ikut berubah.
       if (bus.status !== calculatedStatus) {
         await bus.update({ status: calculatedStatus });
       }
 
-      // Set value untuk dikirim ke frontend
+      // Set value untuk response JSON
       bus.setDataValue("status", calculatedStatus);
       processedBuses.push(bus);
     }

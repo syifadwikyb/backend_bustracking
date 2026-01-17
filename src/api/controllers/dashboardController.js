@@ -10,114 +10,81 @@ import { Op, Sequelize } from "sequelize";
 
 // --- 1. GET DASHBOARD DATA (Main Stats & Live Map) ---
 export const getDashboardData = async (req, res) => {
-  try {
-    const currentDate = new Date().toISOString().split("T")[0];
-    const currentTime = new Date().toTimeString().split(" ")[0];
+    try {
+        const now = dayjs().tz("Asia/Jakarta");
+        const today = now.format("YYYY-MM-DD");
+        const timeNow = now.format("HH:mm:ss");
 
-    // 1. Ambil SEMUA bus
-    const buses = await Bus.findAll({
-      include: [
-        {
-          model: Schedule,
-          as: "jadwal",
-          where: { tanggal: currentDate },
-          required: false, // Left Join
-          include: [
-            {
-              model: Driver,
-              as: "driver",
-              attributes: ["id_driver", "nama", "foto"],
-            },
-            {
-              model: Jalur,
-              as: "jalur",
-              attributes: ["id_jalur", "nama_jalur", "rute_polyline"],
-              include: [
+        // 1. Ambil Bus
+        const buses = await Bus.findAll({
+            include: [
                 {
-                  association: "halte",
-                  attributes: [
-                    "id_halte",
-                    "nama_halte",
-                    "latitude",
-                    "longitude",
-                  ],
+                    model: Schedule,
+                    as: "jadwal",
+                    where: { tanggal: today },
+                    required: false, 
                 },
-              ],
-            },
-          ],
-        },
-        {
-          model: Maintenance,
-          as: "riwayat_perbaikan",
-          where: { status: { [Op.not]: "selesai" } },
-          required: false,
-        },
-      ],
-    });
+                {
+                    model: Maintenance,
+                    as: "riwayat_perbaikan",
+                    where: { status: { [Op.ne]: "selesai" } },
+                    required: false,
+                },
+            ],
+        });
 
-    // 2. Siapkan object statistik
-    const stats = {
-      running: 0,
-      stopped: 0,
-      maintenance: 0,
-      scheduled: 0,
-    };
+        // 2. Init Stats
+        const stats = {
+            running: 0,
+            stopped: 0,
+            maintenance: 0,
+            scheduled: 0
+        };
 
-    // 3. Proses Status Logic
-    const liveBusData = buses.map((bus) => {
-      let currentStatus = "berhenti";
+        // 3. Hitung Status (Logika SAMA PERSIS dengan BusController)
+        const liveBusData = buses.map((bus) => {
+            let currentStatus = "berhenti"; // Default
 
-      // Cek Maintenance (Prioritas Tertinggi)
-      const isMaintenance = bus.riwayat_perbaikan?.length > 0;
+            const isMaintenance = bus.riwayat_perbaikan?.length > 0;
+            let hasActiveSchedule = false;
+            let hasFutureSchedule = false;
 
-      // Cek Jadwal
-      let isRunningBySchedule = false;
-      let isScheduledFuture = false;
+            if (bus.jadwal?.length > 0) {
+                hasActiveSchedule = bus.jadwal.some(j => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai);
+                hasFutureSchedule = bus.jadwal.some(j => timeNow < j.jam_mulai);
+            }
 
-      if (bus.jadwal?.length > 0) {
-        // Cek apakah ada jadwal yang sedang aktif SEKARANG
-        isRunningBySchedule = bus.jadwal.some(
-          (j) => currentTime >= j.jam_mulai && currentTime <= j.jam_selesai,
-        );
-        // Cek apakah ada jadwal NANTI
-        isScheduledFuture = bus.jadwal.some((j) => currentTime < j.jam_mulai);
-      }
+            if (isMaintenance) {
+                currentStatus = 'dalam perbaikan';
+            } else if (hasActiveSchedule) {
+                currentStatus = 'berjalan';
+            } else if (hasFutureSchedule) {
+                currentStatus = 'dijadwalkan';
+            } else {
+                currentStatus = 'berhenti';
+            }
 
-      // --- LOGIKA PENENTUAN STATUS ---
-      if (isMaintenance) {
-        currentStatus = "dalam perbaikan";
-      } else if (isRunningBySchedule) {
-        currentStatus = "berjalan";
-      }
-      // Jika jadwal lewat/belum, TAPI MQTT bilang 'berjalan', percayai MQTT
-      else if (bus.status === "berjalan") {
-        currentStatus = "berjalan";
-      } else if (isScheduledFuture) {
-        currentStatus = "dijadwalkan";
-      } else {
-        currentStatus = "berhenti";
-      }
+            // Hitung Stats
+            if (currentStatus === 'berjalan') stats.running++;
+            else if (currentStatus === 'berhenti') stats.stopped++;
+            else if (currentStatus === 'dalam perbaikan') stats.maintenance++;
+            else if (currentStatus === 'dijadwalkan') stats.scheduled++;
 
-      // 4. Hitung Statistik
-      if (currentStatus === "berjalan") stats.running++;
-      else if (currentStatus === "berhenti") stats.stopped++;
-      else if (currentStatus === "dalam perbaikan") stats.maintenance++;
-      else if (currentStatus === "dijadwalkan") stats.scheduled++;
+            // Return data JSON
+            const data = bus.toJSON();
+            data.status = currentStatus;
+            return data;
+        });
 
-      // Return data bus + status kalkulasi
-      const data = bus.toJSON();
-      data.status = currentStatus;
-      return data;
-    });
+        res.json({
+            liveBuses: liveBusData,
+            stats: stats
+        });
 
-    res.json({
-      liveBuses: liveBusData,
-      stats: stats,
-    });
-  } catch (err) {
-    console.error("Error di getDashboardData:", err.message);
-    res.status(500).json({ message: err.message });
-  }
+    } catch (err) {
+        console.error("Error getDashboardData:", err);
+        res.status(500).json({ message: err.message });
+    }
 };
 
 // --- 2. GET PASSENGER CHART (Data Harian / Per Jam) ---
