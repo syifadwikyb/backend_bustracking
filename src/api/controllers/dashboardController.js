@@ -8,6 +8,14 @@ import Maintenance from "../models/Maintenance.js";
 import TrackingHistory from "../models/TrackingHistory.js";
 import { Op, Sequelize } from "sequelize";
 
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
+
+// Konfigurasi Plugin
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
 // --- 1. GET DASHBOARD DATA (Main Stats & Live Map) ---
 export const getDashboardData = async (req, res) => {
     try {
