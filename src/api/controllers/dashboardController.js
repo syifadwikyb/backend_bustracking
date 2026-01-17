@@ -4,9 +4,11 @@ import Driver from '../models/Driver.js';
 import Schedule from '../models/Schedule.js';
 import Jalur from '../models/Jalur.js';
 import Maintenance from '../models/Maintenance.js';
+// ✅ GANTI: Gunakan TrackingHistory, bukan PassengerHistory
+import TrackingHistory from '../models/TrackingHistory.js'; 
 import { Op, Sequelize } from 'sequelize';
 
-// FUNGSI INI SEKARANG MENGGABUNGKAN 'getLiveBuses' DAN 'getDashboardStats'
+// --- 1. GET DASHBOARD DATA (Main Stats & Live Map) ---
 export const getDashboardData = async (req, res) => {
     try {
         const currentDate = new Date().toISOString().split("T")[0];
@@ -19,7 +21,7 @@ export const getDashboardData = async (req, res) => {
                     model: Schedule,
                     as: "jadwal",
                     where: { tanggal: currentDate },
-                    required: false,
+                    required: false, // Left Join
                     include: [
                         { model: Driver, as: "driver", attributes: ["id_driver", "nama", "foto"] },
                         {
@@ -42,7 +44,7 @@ export const getDashboardData = async (req, res) => {
             ],
         });
 
-        // 2. Siapkan object untuk menghitung statistik
+        // 2. Siapkan object statistik
         const stats = {
             running: 0,
             stopped: 0,
@@ -50,46 +52,56 @@ export const getDashboardData = async (req, res) => {
             scheduled: 0
         };
 
-        // 3. Hitung status di logika (Read-Only, Cepat)
+        // 3. Proses Status Logic
         const liveBusData = buses.map((bus) => {
-            let highestPriority = 0;
             let currentStatus = "berhenti"; 
 
-            if (bus.riwayat_perbaikan?.length > 0) {
-                highestPriority = 4;
-            } 
-            else if (bus.jadwal?.length > 0) {
-                for (const j of bus.jadwal) {
-                    let scheduleStatusPriority = 0;
-                    if (j.jam_mulai <= currentTime && j.jam_selesai >= currentTime) {
-                        scheduleStatusPriority = 3; // berjalan
-                    } else if (j.jam_mulai > currentTime) {
-                        scheduleStatusPriority = 2; // dijadwalkan
-                    }
-                    if (scheduleStatusPriority > highestPriority) {
-                        highestPriority = scheduleStatusPriority;
-                    }
-                }
+            // Cek Maintenance (Prioritas Tertinggi)
+            const isMaintenance = bus.riwayat_perbaikan?.length > 0;
+            
+            // Cek Jadwal
+            let isRunningBySchedule = false;
+            let isScheduledFuture = false;
+
+            if (bus.jadwal?.length > 0) {
+                // Cek apakah ada jadwal yang sedang aktif SEKARANG
+                isRunningBySchedule = bus.jadwal.some(j => 
+                    currentTime >= j.jam_mulai && currentTime <= j.jam_selesai
+                );
+                // Cek apakah ada jadwal NANTI
+                isScheduledFuture = bus.jadwal.some(j => currentTime < j.jam_mulai);
             }
 
-            if (highestPriority === 4) currentStatus = 'dalam perbaikan';
-            else if (highestPriority === 3) currentStatus = 'berjalan';
-            else if (highestPriority === 2) currentStatus = 'dijadwalkan';
+            // --- LOGIKA PENENTUAN STATUS ---
+            if (isMaintenance) {
+                currentStatus = 'dalam perbaikan';
+            } 
+            else if (isRunningBySchedule) {
+                currentStatus = 'berjalan';
+            } 
+            // Jika jadwal lewat/belum, TAPI MQTT bilang 'berjalan', percayai MQTT
+            else if (bus.status === 'berjalan') {
+                currentStatus = 'berjalan';
+            }
+            else if (isScheduledFuture) {
+                currentStatus = 'dijadwalkan';
+            }
+            else {
+                currentStatus = 'berhenti';
+            }
 
-            // 4. Tambahkan ke hitungan statistik
+            // 4. Hitung Statistik
             if (currentStatus === 'berjalan') stats.running++;
             else if (currentStatus === 'berhenti') stats.stopped++;
             else if (currentStatus === 'dalam perbaikan') stats.maintenance++;
             else if (currentStatus === 'dijadwalkan') stats.scheduled++;
 
-            // --- Logika 'bus.update()' yang lambat DIHAPUS ---
-
+            // Return data bus + status kalkulasi
             const data = bus.toJSON();
-            data.status = currentStatus;
+            data.status = currentStatus; 
             return data;
         });
 
-        // 5. Kirim kedua data (liveBuses dan stats) dalam satu respons
         res.json({
             liveBuses: liveBusData,
             stats: stats
@@ -101,27 +113,70 @@ export const getDashboardData = async (req, res) => {
     }
 };
 
-// 3️⃣ Fungsi untuk Chart Penumpang (Tidak berubah)
+// --- 2. GET PASSENGER CHART (Data Harian / Per Jam) ---
 export const getPassengerChartData = async (req, res) => {
     try {
         const today = new Date().toISOString().slice(0, 10);
-        const chartData = await PassengerHistory.findAll({ // Perbaiki typo PassengerStat
+        
+        // ✅ GANTI SUMBER KE TrackingHistory
+        const chartData = await TrackingHistory.findAll({
             attributes: [
-                [Sequelize.fn('HOUR', Sequelize.col('timestamp')), 'jam'],
-                [Sequelize.fn('SUM', Sequelize.col('jumlah_penumpang')), 'total_penumpang'],
+                [Sequelize.fn('HOUR', Sequelize.col('created_at')), 'jam'], 
+                // Kita gunakan MAX atau AVG karena passenger_count adalah snapshot total orang di bus
+                // Bukan orang masuk (SUM). Jadi kita cari "Paling ramai jam berapa?"
+                [Sequelize.fn('MAX', Sequelize.col('passenger_count')), 'total_penumpang'], 
             ],
-            where: Sequelize.where(Sequelize.fn('DATE', Sequelize.col('timestamp')), today),
-            group: [Sequelize.fn('HOUR', Sequelize.col('timestamp'))],
-            order: [[Sequelize.fn('HOUR', Sequelize.col('timestamp')), 'ASC']],
+            // Filter hanya hari ini
+            where: Sequelize.where(Sequelize.fn('DATE', Sequelize.col('created_at')), today),
+            group: [Sequelize.fn('HOUR', Sequelize.col('created_at'))],
+            order: [[Sequelize.fn('HOUR', Sequelize.col('created_at')), 'ASC']],
         });
 
-        const data = chartData.length ? chartData : [
-            { jam: 7, total_penumpang: 50 }, { jam: 9, total_penumpang: 120 },
-            { jam: 12, total_penumpang: 200 }, { jam: 15, total_penumpang: 180 },
-            { jam: 17, total_penumpang: 100 },
-        ];
-        res.json(data);
+        res.json(chartData); 
     } catch (err) {
+        console.error("Error Chart Data:", err);
+        res.status(500).json({ message: err.message });
+    }
+};
+
+// --- 3. GET BUS ACTIVITY (Data Range Tanggal untuk Grafik Garis) ---
+export const getBusActivity = async (req, res) => {
+    try {
+        const { startDate, endDate, busId } = req.query;
+
+        // Default: 7 hari terakhir
+        const start = startDate ? new Date(startDate) : new Date(new Date().setDate(new Date().getDate() - 7));
+        const end = endDate ? new Date(endDate) : new Date();
+        end.setHours(23, 59, 59, 999); 
+
+        // ✅ Query ke TrackingHistory
+        const whereClause = {
+            created_at: {
+                [Op.between]: [start, end]
+            }
+        };
+
+        if (busId) {
+            whereClause.bus_id = busId;
+        }
+
+        const activityData = await TrackingHistory.findAll({
+            attributes: [
+                [Sequelize.fn('DATE', Sequelize.col('created_at')), 'tanggal'],
+                // Berapa penumpang terbanyak yang tercatat pada hari itu?
+                [Sequelize.fn('MAX', Sequelize.col('passenger_count')), 'max_penumpang'],
+                // Rata-rata penumpang hari itu
+                [Sequelize.fn('AVG', Sequelize.col('passenger_count')), 'avg_penumpang']
+            ],
+            where: whereClause,
+            group: [Sequelize.fn('DATE', Sequelize.col('created_at'))],
+            order: [[Sequelize.fn('DATE', Sequelize.col('created_at')), 'ASC']]
+        });
+
+        res.json(activityData);
+
+    } catch (err) {
+        console.error("Error getBusActivity:", err.message);
         res.status(500).json({ message: err.message });
     }
 };
