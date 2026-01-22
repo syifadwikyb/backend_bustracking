@@ -35,21 +35,20 @@ export const createBus = async (req, res) => {
   }
 };
 
-// --- GET ALL BUS (LOGIKA PENENTU UTAMA) ---
+// --- GET ALL BUS ---
 export const getAllBus = async (req, res) => {
   try {
     const now = dayjs().tz("Asia/Jakarta");
     const today = now.format("YYYY-MM-DD");
     const timeNow = now.format("HH:mm:ss");
 
-    // 1. Ambil Bus + Jadwal Hari Ini
     const buses = await Bus.findAll({
       include: [
         {
           model: Schedule,
           as: "jadwal",
           where: { tanggal: today },
-          required: false, // Left Join (Bus tanpa jadwal tetap muncul)
+          required: false,
           include: [
             { model: Driver, as: "driver", attributes: ["nama"] },
             { model: Jalur, as: "jalur", attributes: ["nama_jalur"] },
@@ -68,60 +67,34 @@ export const getAllBus = async (req, res) => {
     const processedBuses = [];
 
     for (const bus of buses) {
-      // --- LOGIKA STATUS BARU (STRICT SCHEDULE) ---
-      let calculatedStatus = "berhenti"; // Default
+      let calculatedStatus = "berhenti";
 
-      // Cek Kondisi
       const isMaintenance = bus.riwayat_perbaikan?.length > 0;
       let hasActiveSchedule = false;
       let hasFutureSchedule = false;
 
       if (bus.jadwal?.length > 0) {
-        // Cek apakah jam SEKARANG masuk dalam rentang jadwal
         hasActiveSchedule = bus.jadwal.some(
           (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai,
         );
-        // Cek apakah ada jadwal NANTI (di masa depan hari ini)
-        // Syarat: Belum masuk jam mulai, DAN tidak sedang ada jadwal aktif
+
         hasFutureSchedule = bus.jadwal.some((j) => timeNow < j.jam_mulai);
       }
 
-      // --- HIERARKI PENENTUAN STATUS ---
-      // 1. Prioritas Tertinggi: Maintenance
-      if (isMaintenance) {
-        calculatedStatus = "dalam perbaikan";
-      }
-      // 2. Prioritas Kedua: Sedang dalam jam operasional
-      else if (hasActiveSchedule) {
-        calculatedStatus = "berjalan";
-      }
-      // 3. Prioritas Ketiga: Ada jadwal nanti (tapi belum mulai)
-      else if (hasFutureSchedule) {
-        calculatedStatus = "dijadwalkan";
-      }
-      // 4. Sisanya: Berhenti (Jadwal sudah lewat atau tidak ada jadwal)
-      else {
-        calculatedStatus = "berhenti";
-      }
+      if (isMaintenance) calculatedStatus = "dalam perbaikan";
+      else if (hasActiveSchedule) calculatedStatus = "berjalan";
+      else if (hasFutureSchedule) calculatedStatus = "dijadwalkan";
+      else calculatedStatus = "berhenti";
 
-      // --- UPDATE DATABASE OTOMATIS ---
-      // Jika status hasil hitungan beda dengan database, update database!
-      // Ini penting agar Dashboard Stats ikut berubah.
       if (bus.status !== calculatedStatus) {
         await bus.update({ status: calculatedStatus });
       }
 
-      // Set value untuk response JSON
       bus.setDataValue("status", calculatedStatus);
 
-      // ===============================
-      // FLATTEN DATA UNTUK FRONTEND
-      // ===============================
       const firstSchedule = bus.jadwal?.[0] ?? null;
-
       bus.setDataValue("nama_jalur", firstSchedule?.jalur?.nama_jalur ?? null);
-
-      bus.setDataValue("nama_driver", firstSchedule?.driver?.nama ?? null);
+      bus.setDataValue("nama", firstSchedule?.driver?.nama ?? null);
 
       processedBuses.push(bus);
     }
