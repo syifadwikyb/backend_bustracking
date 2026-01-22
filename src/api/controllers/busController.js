@@ -21,7 +21,11 @@ export const createBus = async (req, res) => {
     const foto = req.file ? req.file.filename : null;
 
     const bus = await Bus.create({
-      plat_nomor, kode_bus, kapasitas, jenis_bus, foto,
+      plat_nomor,
+      kode_bus,
+      kapasitas,
+      jenis_bus,
+      foto,
       status: status || "berhenti",
     });
 
@@ -75,7 +79,7 @@ export const getAllBus = async (req, res) => {
       if (bus.jadwal?.length > 0) {
         // Cek apakah jam SEKARANG masuk dalam rentang jadwal
         hasActiveSchedule = bus.jadwal.some(
-          (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai
+          (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai,
         );
         // Cek apakah ada jadwal NANTI (di masa depan hari ini)
         // Syarat: Belum masuk jam mulai, DAN tidak sedang ada jadwal aktif
@@ -109,6 +113,16 @@ export const getAllBus = async (req, res) => {
 
       // Set value untuk response JSON
       bus.setDataValue("status", calculatedStatus);
+
+      // ===============================
+      // FLATTEN DATA UNTUK FRONTEND
+      // ===============================
+      const firstSchedule = bus.jadwal?.[0] ?? null;
+
+      bus.setDataValue("nama_jalur", firstSchedule?.jalur?.nama_jalur ?? null);
+
+      bus.setDataValue("nama_driver", firstSchedule?.driver?.nama ?? null);
+
       processedBuses.push(bus);
     }
 
