@@ -49,6 +49,7 @@ export const getAllBus = async (req, res) => {
           as: "jadwal",
           where: { tanggal: today },
           required: false,
+          order: [["jam_mulai", "ASC"]],
           include: [
             { model: Driver, as: "driver", attributes: ["nama"] },
             { model: Jalur, as: "jalur", attributes: ["nama_jalur"] },
@@ -96,7 +97,7 @@ export const getAllBus = async (req, res) => {
       bus.setDataValue("nama_jalur", firstSchedule?.jalur?.nama_jalur ?? null);
       bus.setDataValue("nama", firstSchedule?.driver?.nama ?? null);
 
-      processedBuses.push(bus);
+      processedBuses.push(bus.toJSON());
     }
 
     res.json(processedBuses);
