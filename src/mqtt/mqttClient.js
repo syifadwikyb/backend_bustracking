@@ -14,8 +14,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   const Δλ = ((lon2 - lon1) * Math.PI) / 180;
 
   const a =
-    Math.sin(Δφ / 2) ** 2 +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+    Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c);
@@ -47,38 +46,62 @@ client.on("message", async (topic, message) => {
     if (messageType === "location") {
       const { latitude, longitude, speed, passenger_count } = data;
 
+      // Validasi koordinat
       if (latitude == null || longitude == null) return;
 
-      // 1️⃣ Ambil data bus saat ini
+      // 1️⃣ Cek apakah bus ada di database
       const bus = await Bus.findByPk(bus_id);
       if (!bus) {
-        console.warn(`⚠️ Bus ${bus_id} tidak ditemukan`);
+        // console.warn(`⚠️ Bus ${bus_id} tidak terdaftar di database.`);
         return;
       }
 
-      // 2️⃣ Tentukan jumlah penumpang final
+      // 2️⃣ Tentukan jumlah penumpang (Gunakan data lama jika sensor tidak kirim)
       const PassengerCount = Number.isInteger(passenger_count)
         ? passenger_count
         : bus.penumpang;
 
-      // 3️⃣ Hitung jarak & ETA ke halte (contoh: halte id 1)
-      const nextHalteId = 1;
+      // 3️⃣ LOGIKA PENCARIAN HALTE TERDEKAT (DINAMIS) [PERBAIKAN DISINI]
+      // Ambil semua daftar halte dari database
+      const allHalte = await Halte.findAll({
+        attributes: ["id_halte", "nama_halte", "latitude", "longitude"],
+      });
+
+      let nearestHalte = null;
+      let minDistance = Infinity;
+
+      // Loop semua halte untuk mencari yang jaraknya paling kecil
+      allHalte.forEach((h) => {
+        const dist = calculateDistance(
+          latitude,
+          longitude,
+          parseFloat(h.latitude),
+          parseFloat(h.longitude),
+        );
+
+        if (dist < minDistance) {
+          minDistance = dist;
+          nearestHalte = h;
+        }
+      });
+
+      // Siapkan variabel untuk update DB
+      let nextHalteId = null;
       let jarakMeter = 0;
       let etaDetik = 0;
 
-      const halte = await Halte.findByPk(nextHalteId);
-      if (halte) {
-        jarakMeter = calculateDistance(
-          latitude,
-          longitude,
-          halte.latitude,
-          halte.longitude
-        );
+      // Jika halte terdekat ditemukan
+      if (nearestHalte) {
+        nextHalteId = nearestHalte.id_halte; // Mengambil ID valid dari DB (misal: 12)
+        jarakMeter = minDistance;
+
+        // Hitung ETA (Estimasi Waktu Tiba)
+        // Jika speed < 1 km/h atau 0, anggap 20 km/h agar tidak divide by zero
         const speedMps = (speed && speed > 1 ? speed : 20) / 3.6;
         etaDetik = Math.round(jarakMeter / speedMps);
       }
 
-      // 4️⃣ UPDATE BUS (REALTIME STATE)
+      // 4️⃣ UPDATE STATE BUS (Realtime)
       await Bus.update(
         {
           latitude,
@@ -86,15 +109,15 @@ client.on("message", async (topic, message) => {
           speed: speed || 0,
           penumpang: PassengerCount,
           terakhir_dilihat: now,
-          next_halte_id: nextHalteId,
+          next_halte_id: nextHalteId, // ✅ Aman (ID Valid atau Null)
           distance_to_next_halte: jarakMeter,
           eta_seconds: etaDetik,
           status: "berjalan",
         },
-        { where: { id_bus: bus_id } }
+        { where: { id_bus: bus_id } },
       );
 
-      // 5️⃣ INSERT TRACKING HISTORY (LOG)
+      // 5️⃣ SIMPAN LOG TRACKING (History)
       await TrackingHistory.create({
         bus_id,
         latitude,
@@ -105,20 +128,22 @@ client.on("message", async (topic, message) => {
         updated_at: now,
       });
 
-      // 6️⃣ EMIT SOCKET KE FRONTEND
+      // 6️⃣ KIRIM UPDATE KE FRONTEND VIA WEBSOCKET
       emitBusUpdate({
         bus_id,
         latitude,
         longitude,
         speed: speed || 0,
         passenger_count: PassengerCount,
+        next_halte_id: nextHalteId,
+        distance: jarakMeter,
         eta_seconds: etaDetik,
         status: "berjalan",
         updated_at: now,
       });
 
       console.log(
-        `📍 Bus ${bus_id} | Penumpang: ${PassengerCount}`
+        `📍 Bus ${bus_id} | Penumpang: ${PassengerCount} | Halte Tujuan: ${nearestHalte ? nearestHalte.nama_halte : "-"} (${jarakMeter}m)`,
       );
     }
   } catch (err) {
