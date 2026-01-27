@@ -8,25 +8,34 @@ const Bus = sequelize.define('Bus', {
         primaryKey: true,
     },
     plat_nomor: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING(20),
         allowNull: false,
         unique: true,
+        validate: {
+            notEmpty: true
+        }
     },
     kode_bus: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING(20),
         allowNull: false,
-        unique: true
+        unique: true,
+        validate: {
+            notEmpty: true
+        }
     },
     kapasitas: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 1
+        }
     },
     jenis_bus: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING(50),
         allowNull: false,
     },
     foto: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING(255),
         allowNull: true
     },
     status: {
@@ -45,7 +54,10 @@ const Bus = sequelize.define('Bus', {
     penumpang: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        defaultValue: 0
+        defaultValue: 0,
+        validate: {
+            min: 0
+        }
     },
     terakhir_dilihat: {
         type: DataTypes.DATE,
@@ -60,18 +72,28 @@ const Bus = sequelize.define('Bus', {
         allowNull: true
     },
     distance_to_next_halte: {
-        type: DataTypes.INTEGER, // Dalam meter
-        allowNull: true
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: 0
     },
     eta_seconds: {
-        type: DataTypes.INTEGER, // Dalam detik
-        allowNull: true
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: 0
     }
 }, {
     tableName: 'bus',
     timestamps: true,
     createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
+    indexes: [
+        {
+            fields: ['status']
+        },
+        {
+            fields: ['kode_bus']
+        }
+    ]
 });
 
 export default Bus;

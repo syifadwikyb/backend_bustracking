@@ -8,12 +8,19 @@ const Jalur = sequelize.define('Jalur', {
         primaryKey: true,
     },
     nama_jalur: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING(100),
         allowNull: false,
+        validate: {
+            notEmpty: true
+        }
     },
     kode_jalur: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING(20),
         unique: true,
+        allowNull: false,
+        validate: {
+            notEmpty: true
+        }
     },
     status: {
         type: DataTypes.ENUM('aktif', 'tidak aktif'),
@@ -28,7 +35,16 @@ const Jalur = sequelize.define('Jalur', {
     tableName: 'jalur',
     timestamps: true,
     createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
+    indexes: [
+        {
+            unique: true,
+            fields: ['kode_jalur']
+        },
+        {
+            fields: ['status']
+        }
+    ]
 });
 
 export default Jalur;

@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import { createServer } from "http";
+import startCleanupJob from './cron/Cleanup.js';
 
 // Import Konfigurasi & Koneksi
 import sequelize from './api/config/db.js';
@@ -62,6 +63,8 @@ app.use('/api/dashboard', dashboardRoutes);
 
 // --- SETUP SOCKET.IO (WAJIB JALAN) ---
 initSocket(server);
+
+startCleanupJob();
 
 // --- JALANKAN SERVER (TANPA SYARAT IF) ---
 const PORT = process.env.PORT || 5000;

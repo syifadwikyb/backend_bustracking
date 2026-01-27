@@ -22,6 +22,9 @@ const Schedule = sequelize.define('Schedule', {
     tanggal: {
         type: DataTypes.DATEONLY,
         allowNull: false,
+        validate: {
+            isDate: true
+        }
     },
     jam_mulai: {
         type: DataTypes.TIME,
@@ -37,10 +40,21 @@ const Schedule = sequelize.define('Schedule', {
         defaultValue: 'dijadwalkan'
     }
 }, {
-    tableName: 'schedules',
+    tableName: 'schedule',
     timestamps: true,
     createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
+    indexes: [
+        {
+            fields: ['tanggal']
+        },
+        {
+            fields: ['bus_id']
+        },
+        {
+            fields: ['driver_id']
+        }
+    ]
 });
 
 export default Schedule;

@@ -8,19 +8,32 @@ const Auth = sequelize.define("Auth", {
         primaryKey: true,
     },
     username: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING(100),
         allowNull: false,
         unique: true,
+        validate: {
+            notEmpty: true,
+            len: [3, 100]
+        }
     },
     password: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING(255),
         allowNull: false,
+        validate: {
+            notEmpty: true
+        }
     },
 }, {
     tableName: "auth",
     timestamps: true,
     createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
+    indexes: [
+        {
+            unique: true,
+            fields: ['username']
+        }
+    ]
 });
 
 export default Auth;

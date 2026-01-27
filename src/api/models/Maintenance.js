@@ -1,4 +1,3 @@
-// src/api/models/Maintenance.js
 import { DataTypes } from 'sequelize';
 import sequelize from "../config/db.js";
 
@@ -15,10 +14,16 @@ const Maintenance = sequelize.define('Maintenance', {
     tanggal_perbaikan: {
         type: DataTypes.DATEONLY,
         allowNull: false,
+        validate: {
+            isDate: true
+        }
     },
     tanggal_selesai: {
         type: DataTypes.DATEONLY,
-        allowNull: true, // bisa kosong
+        allowNull: true,
+        validate: {
+            isDate: true
+        }
     },
     deskripsi: {
         type: DataTypes.TEXT,
@@ -32,12 +37,23 @@ const Maintenance = sequelize.define('Maintenance', {
     harga: {
         type: DataTypes.INTEGER,
         allowNull: true,
+        validate: {
+            min: 0
+        }
     }
 }, {
     tableName: 'maintenance',
     timestamps: true,
     createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
+    indexes: [
+        {
+            fields: ['bus_id']
+        },
+        {
+            fields: ['status']
+        }
+    ]
 });
 
 export default Maintenance;

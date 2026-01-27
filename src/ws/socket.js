@@ -2,24 +2,35 @@ import { Server } from "socket.io";
 
 let io;
 
-export default function initSocket(server) {
+// Fungsi untuk Inisialisasi Socket.io di app.js
+const initSocket = (server) => {
     io = new Server(server, {
-        cors: { origin: "*" }
+        cors: {
+            origin: "*", 
+            methods: ["GET", "POST"]
+        }
     });
 
     io.on("connection", (socket) => {
-        console.log("🔌 Client connected:", socket.id);
+        console.log(`🔌 Client connected: ${socket.id}`);
+
+        socket.on("join_bus_room", (busId) => {
+            socket.join(`bus_${busId}`);
+        });
 
         socket.on("disconnect", () => {
-            console.log("❌ Client disconnected:", socket.id);
+            console.log(`❌ Client disconnected: ${socket.id}`);
         });
     });
-}
 
-// Kita hanya butuh satu fungsi ini sekarang
-export function emitBusUpdate(data) {
+    return io;
+};
+
+// Fungsi untuk kirim update ke Frontend
+export const emitBusUpdate = (data) => {
     if (io) {
-        // Data yang dikirim: { bus_id, lat, long, speed, passenger_count, eta, status }
         io.emit("bus_location", data);
     }
-}
+};
+
+export default initSocket;

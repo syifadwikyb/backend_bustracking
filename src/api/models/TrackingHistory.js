@@ -1,9 +1,9 @@
 // models/TrackingHistory.js
 import { DataTypes } from "sequelize";
-import db from "../config/db.js";
+import sequelize from "../config/db.js";
 
-const TrackingHistory = db.define(
-  "tracking_history",
+const TrackingHistory = sequelize.define(
+  "TrackingHistory",
   {
     id_history: {
       type: DataTypes.INTEGER,
@@ -17,27 +17,31 @@ const TrackingHistory = db.define(
     latitude: {
       type: DataTypes.DECIMAL(10, 8),
       allowNull: false,
+      validate: {
+        isDecimal: true,
+      },
     },
     longitude: {
       type: DataTypes.DECIMAL(11, 8),
       allowNull: false,
+      validate: {
+        isDecimal: true,
+      },
     },
     speed: {
       type: DataTypes.INTEGER,
       defaultValue: 0,
+      validate: {
+        min: 0,
+      },
     },
     passenger_count: {
       type: DataTypes.INTEGER,
       defaultValue: 0,
       allowNull: false,
-    },
-    created_at: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
-    updated_at: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
+      validate: {
+        min: 0,
+      },
     },
   },
   {
@@ -45,7 +49,15 @@ const TrackingHistory = db.define(
     timestamps: true,
     createdAt: "created_at",
     updatedAt: "updated_at",
-  }
+    indexes: [
+      {
+        fields: ["bus_id"],
+      },
+      {
+        fields: ["bus_id", "created_at"],
+      },
+    ],
+  },
 );
 
 export default TrackingHistory;

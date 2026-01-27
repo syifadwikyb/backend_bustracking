@@ -2,18 +2,17 @@ import Maintenance from '../models/Maintenance.js';
 import Bus from '../models/Bus.js';
 import { Op } from 'sequelize';
 
-// 🔹 CREATE
+// CREATE
 export const createMaintenance = async (req, res) => {
     const { bus_id, tanggal_perbaikan, tanggal_selesai, deskripsi, harga, status } = req.body;
 
     try {
-        // Simpan langsung status dari frontend
         const maintenance = await Maintenance.create({
             bus_id,
             tanggal_perbaikan,
             tanggal_selesai: tanggal_selesai || null,
             deskripsi,
-            status, // ⬅️ langsung dari frontend
+            status,
             harga
         });
 
@@ -31,7 +30,7 @@ export const createMaintenance = async (req, res) => {
     }
 };
 
-// 🔹 GET ALL
+// GET ALL
 export const getAllMaintenance = async (req, res) => {
     try {
         const maintenances = await Maintenance.findAll({
@@ -49,7 +48,7 @@ export const getAllMaintenance = async (req, res) => {
     }
 };
 
-// 🔹 GET BY ID
+// GET BY ID
 export const getMaintenanceById = async (req, res) => {
     try {
         const maintenance = await Maintenance.findByPk(req.params.id, {
@@ -66,7 +65,7 @@ export const getMaintenanceById = async (req, res) => {
     }
 };
 
-// 🔹 UPDATE
+// UPDATE
 export const updateMaintenance = async (req, res) => {
     try {
         const maintenance = await Maintenance.findByPk(req.params.id);
@@ -82,7 +81,6 @@ export const updateMaintenance = async (req, res) => {
             harga
         });
 
-        // Update status bus
         if (status === 'sedang diperbaiki' || status === 'dijadwalkan') {
             await Bus.update({ status: 'dalam perbaikan' }, { where: { id_bus: maintenance.bus_id } });
         } else if (status === 'selesai') {
@@ -105,7 +103,7 @@ export const updateMaintenance = async (req, res) => {
     }
 };
 
-// 🔹 DELETE
+// DELETE
 export const deleteMaintenance = async (req, res) => {
     try {
         const maintenance = await Maintenance.findByPk(req.params.id);

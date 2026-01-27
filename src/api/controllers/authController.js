@@ -2,65 +2,73 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Auth from "../models/Auth.js";
 
-// Register
+// --- REGISTER ---
 export const register = async (req, res) => {
     try {
-        const {username, password} = req.body;
+        const { username, password } = req.body;
 
-        const existingUser = await Auth.findOne({where: {username}});
-        if (existingUser) {
-            return res.status(400).json({message: "Username sudah digunakan"});
+        if (!username || !password) {
+            return res.status(400).json({ message: "Username dan password wajib diisi" });
+        }
+
+        const existingUserCount = await Auth.count({ where: { username } });
+        if (existingUserCount > 0) {
+            return res.status(400).json({ message: "Username sudah digunakan" });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        await Auth.create({ username, password: hashedPassword });
 
-        await Auth.create({username, password: hashedPassword});
-
-        res.status(201).json({message: "Registrasi berhasil"});
+        res.status(201).json({ message: "Registrasi berhasil" });
     } catch (error) {
-        res.status(500).json({message: error.message});
+        console.error("Register Error:", error);
+        res.status(500).json({ message: "Terjadi kesalahan server" });
     }
 };
 
-// Login
+// --- LOGIN ---
 export const login = async (req, res) => {
     try {
-        const {username, password} = req.body;
+        const { username, password } = req.body;
+        const user = await Auth.findOne({ where: { username } });
+        const invalidMsg = "Username atau Password salah";
 
-        const user = await Auth.findOne({where: {username}});
-        if (!user) return res.status(400).json({message: "Username tidak ditemukan"});
+        if (!user) return res.status(400).json({ message: invalidMsg });
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({message: "Password salah"});
+        if (!isMatch) return res.status(400).json({ message: invalidMsg });
 
         const token = jwt.sign(
-            {id_admin: user.id_admin, username: user.username},
+            { id_admin: user.id_admin, username: user.username },
             process.env.JWT_SECRET,
-            {expiresIn: "1d"}
+            { expiresIn: "1d" }
         );
 
         res.json({
+            message: "Login berhasil",
             token,
-            user: {id_admin: user.id_admin, username: user.username},
+            user: { id_admin: user.id_admin, username: user.username },
         });
     } catch (error) {
-        res.status(500).json({message: error.message});
+        console.error("Login Error:", error);
+        res.status(500).json({ message: "Terjadi kesalahan server" });
     }
 };
 
+// --- CHANGE PASSWORD ---
 export const changePassword = async (req, res) => {
     try {
         const { oldPassword, newPassword } = req.body;
+
         if (!oldPassword || !newPassword) {
-            return res.status(400).json({ message: "Isi oldPassword dan newPassword" });
+            return res.status(400).json({ message: "Isi password lama dan baru" });
         }
 
-        // User sudah ada di req.user
         const user = await Auth.findByPk(req.user.id_admin);
         if (!user) return res.status(404).json({ message: "User tidak ditemukan" });
 
         const isMatch = await bcrypt.compare(oldPassword, user.password);
-        if (!isMatch) return res.status(401).json({ message: "Password lama salah" });
+        if (!isMatch) return res.status(400).json({ message: "Password lama salah" });
 
         user.password = await bcrypt.hash(newPassword, 10);
         await user.save();
