@@ -89,7 +89,7 @@ export const getAllSchedules = async (req, res) => {
         const start = dayjs.tz(`${dateStr} ${item.jam_mulai}`, "YYYY-MM-DD HH:mm:ss", timeZone);
         const end = dayjs.tz(`${dateStr} ${item.jam_selesai}`, "YYYY-MM-DD HH:mm:ss", timeZone);
 
-        let calculatedStatus = item.status; // Default ambil dari DB
+        let calculatedStatus = item.status;
 
         if (start.isValid() && end.isValid()) {
             if (now.isAfter(start) && now.isBefore(end)) {

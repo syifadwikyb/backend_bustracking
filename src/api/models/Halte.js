@@ -31,10 +31,6 @@ const Halte = sequelize.define('Halte', {
     jalur_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        references: {
-            model: 'jalur',
-            key: 'id_jalur'
-        }
     },
     urutan: {
         type: DataTypes.INTEGER,
