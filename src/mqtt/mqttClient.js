@@ -1,11 +1,20 @@
 import mqtt from "mqtt";
-import { emitBusUpdate } from "../ws/socket.js";
+import { emitBusUpdate } from "../ws/socket.js"; // Pastikan path benar
 import Bus from "../api/models/Bus.js";
+import Schedule from "../api/models/Schedule.js";
+import Jalur from "../api/models/Jalur.js";
 import Halte from "../api/models/Halte.js";
 import TrackingHistory from "../api/models/TrackingHistory.js";
 
-// --- CACHING DATA HALTE ---
+// --- KONFIGURASI ---
+const ML_API_URL = "http://localhost:8000/predict-eta"; // URL Tim ML
+const CACHE_DURATION = 10 * 60 * 1000; // 10 Menit
+
+// --- MEMORY CACHE ---
 let cachedHalte = [];
+const busSpeedBuffer = {}; // Untuk Rolling Speed
+
+// Update Cache Halte (Opsional, untuk backup jika DB lambat)
 const updateHalteCache = async () => {
     try {
         const haltes = await Halte.findAll({
@@ -13,120 +22,165 @@ const updateHalteCache = async () => {
             raw: true
         });
         cachedHalte = haltes;
-        console.log(`✅ Cache Halte Diperbarui: ${haltes.length} halte dimuat.`);
+        console.log(`✅ Cache Halte Diperbarui: ${haltes.length} halte.`);
     } catch (err) {
-        console.error("❌ Gagal update cache halte:", err.message);
+        console.error("❌ Gagal cache halte:", err.message);
     }
 };
 updateHalteCache();
-setInterval(updateHalteCache, 10 * 60 * 1000);
+setInterval(updateHalteCache, CACHE_DURATION);
 
-// --- HELPER: Hitung Jarak ---
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    if (lat1 === lat2 && lon1 === lon2) return 0;
-    const R = 6371e3; // (meter)
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-    const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+// 1. Hitung Jarak (Haversine) - Output Meter
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000; 
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) ** 2;
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return Math.round(R * c);
 }
 
-// --- KONEKSI MQTT ---
-const client = mqtt.connect("mqtt://broker.hivemq.com:1883");
+// 2. Hitung Rolling Speed (Rata-rata 30 detik)
+function calculateRollingSpeed(busId, currentSpeed) {
+    if (!busSpeedBuffer[busId]) busSpeedBuffer[busId] = [];
+    busSpeedBuffer[busId].push(currentSpeed);
+    if (busSpeedBuffer[busId].length > 10) busSpeedBuffer[busId].shift();
+    const sum = busSpeedBuffer[busId].reduce((a, b) => a + b, 0);
+    return parseFloat((sum / busSpeedBuffer[busId].length).toFixed(2));
+}
+
+// --- MQTT CLIENT ---
+const client = mqtt.connect("mqtt://145.79.15.182:1883");
 
 client.on("connect", () => {
     console.log("✅ Terhubung ke MQTT Broker");
-    client.subscribe("syifa/tracking/bus/#", (err) => {
-        if (!err) console.log("📡 Subscribe: syifa/tracking/bus/#");
-    });
+    client.subscribe("diptrack/tracking/bus/#");
 });
 
 client.on("message", async (topic, message) => {
+    console.log(`🔔 PING! Ada pesan di topik: ${topic}`);
+    console.log(`📦 Isinya: ${message.toString()}`);
+
     const topicParts = topic.split("/");
-    if (topicParts.length < 5) return;
+    if (topicParts.length < 5 || topicParts[4] !== "location") return;
 
     const bus_id = parseInt(topicParts[3]);
-    const messageType = topicParts[4];
-
-    if (isNaN(bus_id) || messageType !== "location") return;
+    if (isNaN(bus_id)) return;
 
     try {
         const payload = JSON.parse(message.toString());
-        const { latitude, longitude, speed, passenger_count } = payload;
+        if (payload.latitude == null || payload.longitude == null) return;
 
-        if (latitude == null || longitude == null) return;
+        const currentBus = await Bus.findByPk(bus_id, {
+            include: [{
+                model: Schedule,
+                as: 'jadwal',
+                where: { status: 'berjalan' },
+                required: false,
+                include: [{
+                    model: Jalur,
+                    as: 'jalur',
+                    include: [{ 
+                        model: Halte, 
+                        as: 'halte'
+                    }]
+                }]
+            }]
+        });
 
-        const bus = await Bus.findByPk(bus_id, { attributes: ['id_bus', 'penumpang'] });
-        if (!bus) {
-            return;
-        }
+        if (!currentBus) return;
 
-        const finalPassengerCount = Number.isInteger(passenger_count) ? passenger_count : bus.penumpang;
-
-        let nearestHalte = null;
+        // Persiapan Data untuk ML
+        const activeSchedule = currentBus.jadwal?.[0];
+        let mlResult = { eta_seconds: null, next_halte_id: null };
         let minDistance = Infinity;
+        let targetHalteName = null;
 
-        if (cachedHalte.length > 0) {
-            for (const h of cachedHalte) {
-                const dist = calculateDistance(latitude, longitude, parseFloat(h.latitude), parseFloat(h.longitude));
+        if (activeSchedule && activeSchedule.jalur?.halte) { 
+            const allHaltes = activeSchedule.jalur.halte;
+            
+            let targetIndex = 0;
+            let targetHalte = null;
+
+            allHaltes.forEach((h, index) => {
+                const dist = getDistanceMeters(payload.latitude, payload.longitude, parseFloat(h.latitude), parseFloat(h.longitude));
                 if (dist < minDistance) {
                     minDistance = dist;
-                    nearestHalte = h;
+                    targetHalte = h;
+                    targetIndex = index;
+                }
+            });
+
+            if (targetHalte) {
+                targetHalteName = targetHalte.nama_halte;
+                
+                const rollingSpeed = calculateRollingSpeed(bus_id, payload.speed || 0);
+                const remainingCount = allHaltes.length - targetIndex;
+                const now = new Date();
+
+                const mlPayload = {
+                    route_id: activeSchedule.jalur_id,
+                    remaining_halte_count: remainingCount,
+                    distance_to_target: minDistance,
+                    rolling_speed_30s: rollingSpeed,
+                    hour_of_day: now.getHours(),
+                    day_of_week: now.getDay()
+                };
+
+                try {
+                    const response = await fetch(ML_API_URL, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(mlPayload)
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        mlResult.eta_seconds = result.eta_second;
+                        mlResult.next_halte_id = targetHalte.id_halte;
+                    }
+                } catch (mlErr) {
+                    console.error("⚠️ ML Service Error/Skip:", mlErr.message);
                 }
             }
         }
 
-        let nextHalteId = null;
-        let etaSeconds = 0;
-
-        if (nearestHalte) {
-            nextHalteId = nearestHalte.id_halte;
-            
-            const speedMps = (speed && speed > 0 ? speed : 20) / 3.6; 
-            etaSeconds = Math.round(minDistance / speedMps);
-        }
-
         const now = new Date();
+        const finalPassenger = payload.passenger_count ?? currentBus.penumpang;
 
         await Promise.all([
             Bus.update({
-                latitude,
-                longitude,
-                speed: speed || 0,
-                penumpang: finalPassengerCount,
+                latitude: payload.latitude,
+                longitude: payload.longitude,
+                speed: payload.speed || 0,
+                penumpang: finalPassenger,
                 terakhir_dilihat: now,
-                next_halte_id: nextHalteId,
-                distance_to_next_halte: minDistance,
-                eta_seconds: etaSeconds,
-                status: (speed > 1) ? 'berjalan' : 'berhenti'
-            }, { 
-                where: { id_bus: bus_id } 
-            }),
+                next_halte_id: mlResult.next_halte_id,
+                distance_to_next_halte: minDistance === Infinity ? 0 : minDistance,
+                eta_seconds: mlResult.eta_seconds,
+                status: (payload.speed > 1) ? 'berjalan' : 'berhenti'
+            }, { where: { id_bus: bus_id } }),
 
             TrackingHistory.create({
                 bus_id,
-                latitude,
-                longitude,
-                speed: speed || 0,
-                passenger_count: finalPassengerCount,
+                latitude: payload.latitude,
+                longitude: payload.longitude,
+                speed: payload.speed || 0,
+                passenger_count: finalPassenger,
                 created_at: now
             })
         ]);
 
         emitBusUpdate({
             bus_id,
-            latitude,
-            longitude,
-            speed: speed || 0,
-            passenger_count: finalPassengerCount,
-            next_halte_id: nextHalteId,
-            nama_halte_tujuan: nearestHalte ? nearestHalte.nama_halte : null,
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+            speed: payload.speed || 0,
+            passenger_count: finalPassenger,
+            next_halte_id: mlResult.next_halte_id,
+            nama_halte_tujuan: targetHalteName,
             distance: minDistance,
-            eta_seconds: etaSeconds,
+            eta_seconds: mlResult.eta_seconds,
             updated_at: now
         });
 

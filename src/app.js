@@ -20,7 +20,6 @@ import dashboardRoutes from './api/routes/dashboardRoutes.js';
 
 // Import Modul Lain
 import initSocket from './ws/socket.js';
-// Di Render server nyala 24 jam, jadi MQTT aman dinyalakan
 import "./mqtt/mqttClient.js"; 
 
 // --- Konfigurasi Awal ---
