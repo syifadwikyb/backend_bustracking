@@ -18,8 +18,8 @@ import maintenanceRoutes from "./api/routes/maintenanceRoutes.js";
 import scheduleRoutes from "./api/routes/scheduleRoutes.js";
 import dashboardRoutes from './api/routes/dashboardRoutes.js';
 
-// Import Modul Lain
-import initSocket from './ws/socket.js';
+// --- PERUBAHAN 1: Import emitBusUpdate juga ---
+import initSocket, { emitBusUpdate } from './ws/socket.js'; 
 import "./mqtt/mqttClient.js"; 
 
 // --- Konfigurasi Awal ---
@@ -30,7 +30,7 @@ const app = express();
 const server = createServer(app); 
 
 // --- Middleware ---
-app.use(express.json());
+app.use(express.json()); // Wajib agar bisa baca body JSON dari REST API
 app.use(cors({
     origin: "*",
     methods: ["GET", "POST","PUT", "DELETE"]
@@ -60,15 +60,29 @@ app.use('/api/maintenance', maintenanceRoutes)
 app.use('/api/schedules', scheduleRoutes)
 app.use('/api/dashboard', dashboardRoutes);
 
+// --- PERUBAHAN 2: Endpoint Khusus REST API (Hybrid Mode) ---
+app.post('/api/bus-location', (req, res) => {
+    const data = req.body;
+    
+    // 1. Log ke terminal (Agar terlihat bedanya dengan MQTT)
+    console.log(`[REST-HTTP] Data Masuk Bus ${data.bus_id} | Speed: ${data.speed} km/h`);
+
+    // 2. Kirim langsung ke Peta (Frontend) lewat Socket.io
+    emitBusUpdate(data);
+
+    // 3. Jawab HP/Simulator bahwa data diterima
+    res.status(200).json({ status: "OK", timestamp: Date.now() });
+});
+
 // --- SETUP SOCKET.IO (WAJIB JALAN) ---
 initSocket(server);
 
 startCleanupJob();
 
-// --- JALANKAN SERVER (TANPA SYARAT IF) ---
+// --- JALANKAN SERVER ---
 const PORT = process.env.PORT || 5000;
 
-// Gunakan '0.0.0.0' agar bisa diakses dari luar container Render
+// Gunakan '0.0.0.0' agar bisa diakses dari luar container Render/VPS
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server berjalan di port ${PORT}`);
 });
