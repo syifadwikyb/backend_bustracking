@@ -77,7 +77,7 @@ export const getAllSchedules = async (req, res) => {
     const schedules = await Schedule.findAll({
       include: [
         { model: Bus, as: 'bus', attributes: ['id_bus', 'plat_nomor', 'kode_bus'] },
-        { model: Driver, as: 'driver', attributes: ['id_driver', 'nama'] },
+        { model: Driver, as: 'driver', attributes: ['id_driver', 'nama', 'foto'] },
         { model: Jalur, as: 'jalur', attributes: ['id_jalur', 'nama_jalur'] },
       ],
       order: [['tanggal', 'DESC'], ['jam_mulai', 'ASC']]

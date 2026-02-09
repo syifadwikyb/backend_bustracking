@@ -3,10 +3,8 @@ import { Op } from 'sequelize';
 import TrackingHistory from '../api/models/TrackingHistory.js'; 
 
 const startCleanupJob = () => {
-    console.log('✅ Sistem Cron Job (Auto-Cleanup) telah aktif.');
-
     cron.schedule('0 2 * * *', async () => { 
-        console.log('⏰ [CRON] Memulai pembersihan data history lama...');
+        console.log('[CRON] Memulai pembersihan data history lama...');
 
         try {
             const retentionDate = new Date();

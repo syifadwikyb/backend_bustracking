@@ -1,9 +1,5 @@
 import mqtt from 'mqtt';
 
-// ==========================================
-// KONFIGURASI TARGET (VPS KAMU)
-// ==========================================
-// Perhatikan formatnya: mqtt://IP:PORT
 const HOST = 'mqtt://145.79.15.182:1883'; 
 
 console.log(`⏳ Mencoba menghubungi Broker di ${HOST}...`);
