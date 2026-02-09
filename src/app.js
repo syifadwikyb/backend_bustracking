@@ -2,6 +2,9 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import { createServer } from "http";
+import path from 'path';               // 👈 TAMBAHAN WAJIB
+import { fileURLToPath } from 'url';   // 👈 TAMBAHAN WAJIB
+
 import startCleanupJob from './cron/Cleanup.js';
 
 // Import Konfigurasi & Koneksi
@@ -18,24 +21,29 @@ import maintenanceRoutes from "./api/routes/maintenanceRoutes.js";
 import scheduleRoutes from "./api/routes/scheduleRoutes.js";
 import dashboardRoutes from './api/routes/dashboardRoutes.js';
 
-// --- PERUBAHAN 1: Import emitBusUpdate juga ---
 import initSocket, { emitBusUpdate } from './ws/socket.js'; 
 import "./mqtt/mqttClient.js"; 
 
 // --- Konfigurasi Awal ---
 dotenv.config();
-const app = express();
 
-// PENTING: Server HTTP dibuat di luar logika apapun
+// 👇 SETUP VARIABLE __dirname (WAJIB UNTUK ES MODULE)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
 const server = createServer(app); 
 
 // --- Middleware ---
-app.use(express.json()); // Wajib agar bisa baca body JSON dari REST API
+app.use(express.json());
 app.use(cors({
     origin: "*",
     methods: ["GET", "POST","PUT", "DELETE"]
 }));
-app.use('/uploads', express.static('uploads'));
+
+// 👇 PERBAIKAN UTAMA DI SINI!
+// Gunakan path.join agar server TAHU PERSIS lokasi folder uploads
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // --- Setup Database ---
 const startDatabase = async () => {
@@ -49,7 +57,7 @@ const startDatabase = async () => {
 };
 startDatabase();
 
-// --- Daftarkan Routes API ---
+// --- Routes API ---
 app.get('/', (req, res) => res.send('Backend Bus Tracking is Live! 🚀'));
 app.use('/api/auth', authRoutes);
 app.use('/api/drivers', driverRoutes);
@@ -60,29 +68,21 @@ app.use('/api/maintenance', maintenanceRoutes)
 app.use('/api/schedules', scheduleRoutes)
 app.use('/api/dashboard', dashboardRoutes);
 
-// --- PERUBAHAN 2: Endpoint Khusus REST API (Hybrid Mode) ---
+// --- Endpoint Hybrid ---
 app.post('/api/bus-location', (req, res) => {
     const data = req.body;
-    
-    // 1. Log ke terminal (Agar terlihat bedanya dengan MQTT)
     console.log(`[REST-HTTP] Data Masuk Bus ${data.bus_id} | Speed: ${data.speed} km/h`);
-
-    // 2. Kirim langsung ke Peta (Frontend) lewat Socket.io
     emitBusUpdate(data);
-
-    // 3. Jawab HP/Simulator bahwa data diterima
     res.status(200).json({ status: "OK", timestamp: Date.now() });
 });
 
-// --- SETUP SOCKET.IO (WAJIB JALAN) ---
+// --- Init Services ---
 initSocket(server);
-
 startCleanupJob();
 
 // --- JALANKAN SERVER ---
 const PORT = process.env.PORT || 5000;
-
-// Gunakan '0.0.0.0' agar bisa diakses dari luar container Render/VPS
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server berjalan di port ${PORT}`);
+    console.log(`📂 Folder Uploads dilayani di: ${path.join(__dirname, 'uploads')}`); // Log Debugging
 });
