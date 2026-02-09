@@ -115,71 +115,12 @@ export const getAllBus = async (req, res) => {
 };
 
 // --- GET BUS BY ID ---
-// --- GET BUS BY ID (VERSI LENGKAP & FIX) ---
 export const getBusById = async (req, res) => {
   try {
-    // 1. Tentukan tanggal hari ini (Zona Waktu Jakarta)
-    const now = dayjs().tz("Asia/Jakarta");
-    const today = now.format("YYYY-MM-DD");
-
-    // 2. Query Bus dengan Include Jadwal & Driver
-    const busInstance = await Bus.findByPk(req.params.id, {
-      include: [
-        {
-          model: Schedule,
-          as: "jadwal",
-          // Hanya ambil jadwal tanggal hari ini
-          where: { tanggal: today },
-          // required: false -> Agar bus tetap tampil meski TIDAK ADA jadwal hari ini
-          required: false, 
-          order: [["jam_mulai", "ASC"]],
-          include: [
-            // PENTING: Ambil nama DAN foto driver
-            { 
-              model: Driver, 
-              as: "driver", 
-              attributes: ["nama", "foto"] 
-            },
-            { 
-              model: Jalur, 
-              as: "jalur", 
-              attributes: ["nama_jalur"] 
-            },
-          ],
-        },
-        // Include Maintenance (Opsional, untuk info status)
-        {
-          model: Maintenance,
-          as: "riwayat_perbaikan",
-          where: { status: { [Op.ne]: "selesai" } }, 
-          required: false,
-        },
-      ],
-    });
-
-    // 3. Cek jika bus tidak ditemukan
-    if (!busInstance) {
-        return res.status(404).json({ message: "Bus tidak ditemukan" });
-    }
-
-    // 4. Konversi ke JSON Object agar bisa dimodifikasi
-    const bus = busInstance.toJSON();
-
-    // 5. MAPPING DATA (Bagian Paling Penting untuk Frontend)
-    // Ambil jadwal pertama yang ditemukan hari ini (jika ada)
-    const currentSchedule = bus.jadwal?.[0] || {};
-
-    // Pindahkan data nested ke root object
-    // Ini yang membuat frontend bisa baca bus.foto_driver & bus.nama_driver
-    bus.nama_jalur = currentSchedule.jalur?.nama_jalur || "-";
-    bus.nama_driver = currentSchedule.driver?.nama || "-";
-    bus.foto_driver = currentSchedule.driver?.foto || null; 
-
-    // Kirim response
+    const bus = await Bus.findByPk(req.params.id);
+    if (!bus) return res.status(404).json({ message: "Bus tidak ditemukan" });
     res.json(bus);
-
   } catch (err) {
-    console.error("Error getBusById:", err);
     res.status(500).json({ message: err.message });
   }
 };
