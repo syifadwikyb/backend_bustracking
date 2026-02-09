@@ -41,8 +41,6 @@ app.use(cors({
     methods: ["GET", "POST","PUT", "DELETE"]
 }));
 
-// 👇 PERBAIKAN UTAMA DI SINI!
-// Gunakan path.join agar server TAHU PERSIS lokasi folder uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // --- Setup Database ---
@@ -84,5 +82,5 @@ startCleanupJob();
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server berjalan di port ${PORT}`);
-    console.log(`📂 Folder Uploads dilayani di: ${path.join(__dirname, 'uploads')}`); // Log Debugging
+    console.log(`📂 Folder Uploads dilayani di: ${path.join(__dirname, 'uploads')}`);
 });
