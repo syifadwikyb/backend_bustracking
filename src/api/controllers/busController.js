@@ -53,7 +53,7 @@ export const getAllBus = async (req, res) => {
           required: false,
           order: [["jam_mulai", "ASC"]],
           include: [
-            { model: Driver, as: "driver", attributes: ["nama"] },
+            { model: Driver, as: "driver", attributes: ["nama", "foto"] },
             { model: Jalur, as: "jalur", attributes: ["nama_jalur"] },
           ],
         },
