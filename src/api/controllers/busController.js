@@ -53,6 +53,7 @@ export const getAllBus = async (req, res) => {
           required: false,
           order: [["jam_mulai", "ASC"]],
           include: [
+            // Pastikan attributes menyertakan 'foto'
             { model: Driver, as: "driver", attributes: ["nama", "foto"] },
             { model: Jalur, as: "jalur", attributes: ["nama_jalur"] },
           ],
@@ -94,9 +95,14 @@ export const getAllBus = async (req, res) => {
 
         bus.status = calculatedStatus;
 
+        // --- BAGIAN INI DIPERBAIKI ---
         const currentSchedule = bus.jadwal?.[0] || {};
+        
         bus.nama_jalur = currentSchedule.jalur?.nama_jalur || "-";
         bus.nama_driver = currentSchedule.driver?.nama || "-";
+        
+        // 👇 TAMBAHAN PENTING: Mengambil foto driver ke level root object
+        bus.foto_driver = currentSchedule.driver?.foto || null;
 
         return bus;
     });
