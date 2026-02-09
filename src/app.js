@@ -2,10 +2,11 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import { createServer } from "http";
-import path from 'path';               // 👈 TAMBAHAN WAJIB
-import { fileURLToPath } from 'url';   // 👈 TAMBAHAN WAJIB
-
 import startCleanupJob from './cron/Cleanup.js';
+
+// ✅ TAMBAHAN WAJIB 1: Import path & url
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Import Konfigurasi & Koneksi
 import sequelize from './api/config/db.js';
@@ -27,7 +28,6 @@ import "./mqtt/mqttClient.js";
 // --- Konfigurasi Awal ---
 dotenv.config();
 
-// 👇 SETUP VARIABLE __dirname (WAJIB UNTUK ES MODULE)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -74,7 +74,7 @@ app.post('/api/bus-location', (req, res) => {
     res.status(200).json({ status: "OK", timestamp: Date.now() });
 });
 
-// --- Init Services ---
+// --- Init Socket ---
 initSocket(server);
 startCleanupJob();
 
@@ -82,5 +82,4 @@ startCleanupJob();
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server berjalan di port ${PORT}`);
-    console.log(`📂 Folder Uploads dilayani di: ${path.join(__dirname, 'uploads')}`);
 });
