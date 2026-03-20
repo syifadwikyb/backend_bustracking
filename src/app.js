@@ -19,11 +19,12 @@ import busRoutes from "./api/routes/busRoutes.js";
 import halteRoutes from './api/routes/halteRoutes.js';
 import jalurRoutes from './api/routes/jalurRoutes.js';
 import maintenanceRoutes from "./api/routes/maintenanceRoutes.js";
-import scheduleRoutes from "./api/routes/scheduleRoutes.js";
+import scheduleRoutes from './api/routes/scheduleRoutes.js';
 import dashboardRoutes from './api/routes/dashboardRoutes.js';
+import {startAutoUpdateSchedules} from './api/controllers/scheduleController.js';
 
 import initSocket, { emitBusUpdate } from './ws/socket.js'; 
-import "./mqtt/mqttClient.js"; 
+import "./mqtt/mqttClient.js";
 
 // --- Konfigurasi Awal ---
 dotenv.config();
@@ -77,6 +78,8 @@ app.post('/api/bus-location', (req, res) => {
 // --- Init Socket ---
 initSocket(server);
 startCleanupJob();
+
+startAutoUpdateSchedules();
 
 // --- JALANKAN SERVER ---
 const PORT = process.env.PORT || 5000;
