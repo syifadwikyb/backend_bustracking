@@ -26,7 +26,7 @@ const initSocket = (server) => {
 };
 
 // Fungsi untuk kirim update ke Frontend
-export const emitBusUpdate = (data) => {
+export const emitBusLocation = (data) => {
     if (io) {
         io.emit("bus_location", data);
     }

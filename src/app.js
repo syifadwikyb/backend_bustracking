@@ -23,7 +23,7 @@ import scheduleRoutes from './api/routes/scheduleRoutes.js';
 import dashboardRoutes from './api/routes/dashboardRoutes.js';
 import {startAutoUpdateSchedules} from './api/controllers/scheduleController.js';
 
-import initSocket, { emitBusUpdate } from './ws/socket.js'; 
+import initSocket, { emitBusLocation } from './ws/socket.js'; 
 import "./mqtt/mqttClient.js";
 
 // --- Konfigurasi Awal ---
@@ -71,7 +71,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.post('/api/bus-location', (req, res) => {
     const data = req.body;
     console.log(`[REST-HTTP] Data Masuk Bus ${data.bus_id} | Speed: ${data.speed} km/h`);
-    emitBusUpdate(data);
+    emitBusLocation(data);
     res.status(200).json({ status: "OK", timestamp: Date.now() });
 });
 
