@@ -288,13 +288,15 @@ client.on("message", async (topic, message) => {
         penumpang: finalPassenger,
         terakhir_dilihat: now,
         next_halte_id: targetHalte ? targetHalte.id_halte : null,
-        distance_to_next_halte: (minDistance === Infinity || isNaN(minDistance)) ? 0 : minDistance,
+        distance_to_next_halte:
+          minDistance === Infinity || isNaN(minDistance) ? 0 : minDistance,
         eta_seconds: mlResult.eta_seconds,
         status: payload.speed > 1 ? "berjalan" : "berhenti",
       },
       { where: { id_bus: bus_id } },
     );
 
+    const targetStop = mlResult.daftar_eta.find(h => h.is_target === true);
     // 5. KIRIM KE FRONTEND LEWAT SOCKET (REAL-TIME)
     emitBusLocation({
       bus_id,
@@ -302,10 +304,10 @@ client.on("message", async (topic, message) => {
       longitude: payload.longitude,
       speed: payload.speed || 0,
       passenger_count: finalPassenger,
-      next_halte_id: targetHalte ? targetHalte.id_halte : null,
-      nama_halte_tujuan: targetHalteName,
-      distance: minDistance,
-      eta_seconds: mlResult.eta_seconds,
+      next_halte_id: targetStop ? targetStop.halte_id : null,
+      nama_halte_tujuan: targetStop ? targetStop.nama_halte : "Rute Berakhir",
+      distance: targetStop ? targetStop.distance_meters : 0,
+      eta_seconds: targetStop ? targetStop.eta_seconds : null,
       daftar_eta: mlResult.daftar_eta || [],
       updated_at: now,
     });
