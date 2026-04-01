@@ -1,6 +1,6 @@
 // File: controllers/EtaController.js
 
-const ML_API_URL = "http://145.79.15.182:8000/prediksi";
+const ML_API_URL = "http://localhost:8000/prediksi";
 
 // Fungsi ini yang akan dipanggil oleh mqttClient
 export const getEtaFromML = async (mlPayload) => {
