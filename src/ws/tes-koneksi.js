@@ -1,6 +1,9 @@
 import mqtt from 'mqtt';
+import dotenv from 'dotenv';
 
-const HOST = 'mqtt://145.79.15.182:1883'; 
+dotenv.config();
+
+const HOST = process.env.MQTT_BROKER_URL;
 
 console.log(`⏳ Mencoba menghubungi Broker di ${HOST}...`);
 console.log(`   (Jika lama tidak ada respon, berarti Firewall VPS masih tertutup)`);

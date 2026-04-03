@@ -4,8 +4,10 @@ import Bus from "../api/models/Bus.js";
 import Schedule from "../api/models/Schedule.js";
 import Jalur from "../api/models/Jalur.js";
 import Halte from "../api/models/Halte.js";
-import TrackingHistory from "../api/models/TrackingHistory.js";
 import { getEtaFromML } from "../api/controllers/EtaController.js";
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 // --- KONFIGURASI ---
 const CACHE_DURATION = 10 * 60 * 1000; // 10 Menit
@@ -52,7 +54,9 @@ function calculateRollingSpeed(busId, currentSpeed) {
 }
 
 // --- MQTT CLIENT ---
-const client = mqtt.connect("mqtt://145.79.15.182:1883");
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL;
+
+const client = mqtt.connect(MQTT_BROKER_URL);
 
 client.on("connect", () => {
   console.log("✅ [MQTT UTAMA] Berhasil Terhubung ke Broker!");

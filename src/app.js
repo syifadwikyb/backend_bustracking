@@ -3,8 +3,6 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import { createServer } from "http";
 import startCleanupJob from './cron/Cleanup.js';
-
-// ✅ TAMBAHAN WAJIB 1: Import path & url
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -82,7 +80,7 @@ startCleanupJob();
 startAutoUpdateSchedules();
 
 // --- JALANKAN SERVER ---
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server berjalan di port ${PORT}`);
 });
