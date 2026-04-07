@@ -29,6 +29,7 @@ export const getDashboardData = async (req, res) => {
               model: Driver,
               as: "driver",
               attributes: ["nama", "driver_foto"],
+              required: false, // 🔥 WAJIB
             },
           ],
         },

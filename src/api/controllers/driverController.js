@@ -17,7 +17,7 @@ export const createDriver = async (req, res) => {
         if (existing > 0) return res.status(400).json({ message: "Kode Driver sudah ada" });
 
         const driver = await Driver.create({
-            kode_driver, nama, tanggal_lahir, nomor_telepon, driver_foto,
+            kode_driver, nama, tanggal_lahir, nomor_telepon, foto,
             status: status || 'berhenti',
         });
         res.status(201).json(driver);
