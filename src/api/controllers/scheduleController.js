@@ -110,7 +110,7 @@ export const getAllSchedules = async (req, res) => {
         {
           model: Driver,
           as: "driver",
-          attributes: ["id_driver", "nama", ["driver_foto", "foto"]],
+          attributes: ["id_driver", "nama", "driver_foto"],
         },
         { model: Jalur, as: "jalur", attributes: ["id_jalur", "nama_jalur"] },
       ],
