@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import Auth from "../models/Auth.js"; // Import model untuk verifikasi ganda
+import Auth from "../models/Auth.js";
 
 export const authMiddleware = async (req, res, next) => {
     const authHeader = req.headers["authorization"];

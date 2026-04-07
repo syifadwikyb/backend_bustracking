@@ -1,5 +1,3 @@
-// src/api/routes/maintenanceRoutes.js
-
 import express from 'express';
 import * as maintenanceController from '../controllers/maintenanceController.js';
 

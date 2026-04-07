@@ -40,7 +40,7 @@ app.use(cors({
     methods: ["GET", "POST","PUT", "DELETE"]
 }));
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // --- Setup Database ---
 const startDatabase = async () => {
