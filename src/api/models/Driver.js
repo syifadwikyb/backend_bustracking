@@ -36,7 +36,7 @@ const Driver = sequelize.define('Driver', {
             isNumeric: true
         }
     },
-    foto: {
+    driver_foto: {
         type: DataTypes.STRING(255),
         allowNull: true,
     },

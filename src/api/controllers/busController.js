@@ -58,7 +58,7 @@ export const getAllBus = async (req, res) => {
             {
               model: Driver,
               as: "driver",
-              attributes: ["nama", ["foto", "driver_foto"]],
+              attributes: ["nama", "driver_foto"],
             },
             {
               model: Jalur,
