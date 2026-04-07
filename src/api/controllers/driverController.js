@@ -17,7 +17,7 @@ export const createDriver = async (req, res) => {
         if (existing > 0) return res.status(400).json({ message: "Kode Driver sudah ada" });
 
         const driver = await Driver.create({
-            kode_driver, nama, tanggal_lahir, nomor_telepon, foto,
+            kode_driver, nama, tanggal_lahir, nomor_telepon, driver_foto,
             status: status || 'berhenti',
         });
         res.status(201).json(driver);
@@ -68,7 +68,6 @@ export const getDrivers = async (req, res) => {
                 else if (isScheduled) calculatedStatus = 'dijadwalkan';
             }
 
-            driver.driver_foto = driver.foto;
             driver.status = calculatedStatus;
             delete driver.jadwal;
             return driver;
@@ -104,7 +103,7 @@ export const updateDriver = async (req, res) => {
 
         await driver.update({
             kode_driver, nama, tanggal_lahir, nomor_telepon,
-            foto: fotoFinal,
+            driver_foto: fotoFinal,
             status: status || driver.status 
         });
 

@@ -6,8 +6,8 @@ const router = express.Router();
 
 router.get('/', driverController.getDrivers);
 router.get('/:id', driverController.getDriverById);
-router.post('/', upload.single('foto'), driverController.createDriver);
-router.put('/:id', upload.single('foto'), driverController.updateDriver);
+router.post('/', upload.single('driver_foto'), driverController.createDriver);
+router.put('/:id', upload.single('driver_foto'), driverController.updateDriver);
 router.delete('/:id', driverController.deleteDriver);
 
 export default router;
