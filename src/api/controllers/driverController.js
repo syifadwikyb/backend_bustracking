@@ -68,6 +68,7 @@ export const getDrivers = async (req, res) => {
                 else if (isScheduled) calculatedStatus = 'dijadwalkan';
             }
 
+            driver.driver_foto = driver.foto;
             driver.status = calculatedStatus;
             delete driver.jadwal;
             return driver;
