@@ -18,8 +18,10 @@ export const createBus = async (req, res) => {
     const { plat_nomor, kode_bus, kapasitas, jenis_bus, status } = req.body;
     const foto = req.file ? req.file.filename : null;
 
-    if(!plat_nomor || !kode_bus) {
-        return res.status(400).json({ message: "Plat nomor dan Kode bus wajib diisi" });
+    if (!plat_nomor || !kode_bus) {
+      return res
+        .status(400)
+        .json({ message: "Plat nomor dan Kode bus wajib diisi" });
     }
 
     const bus = await Bus.create({
@@ -52,69 +54,67 @@ export const getAllBus = async (req, res) => {
           where: { tanggal: today },
           required: false,
           order: [["jam_mulai", "ASC"]],
-          include: [            
-            { 
-              model: Driver, 
-              as: "driver", 
-              attributes: [
-                "nama", 
-                ["foto", "driver_foto"] 
-              ]
+          include: [
+            {
+              model: Driver,
+              as: "driver",
+              attributes: ["nama", ["foto", "driver_foto"]],
             },
-            { 
-              model: Jalur, 
-              as: "jalur", 
-              attributes: ["nama_jalur"] 
+            {
+              model: Jalur,
+              as: "jalur",
+              attributes: ["nama_jalur"],
             },
           ],
         },
         {
           model: Maintenance,
           as: "riwayat_perbaikan",
-          where: { status: { [Op.ne]: "selesai" } }, 
+          where: { status: { [Op.ne]: "selesai" } },
           required: false,
         },
       ],
       order: [["plat_nomor", "ASC"]],
     });
-    
+
     const processedBuses = buses.map((busInstance) => {
-        const bus = busInstance.toJSON(); 
+      const bus = busInstance.toJSON();
 
-        let calculatedStatus = "berhenti";
-        const isMaintenance = bus.riwayat_perbaikan?.length > 0;
-        let hasActiveSchedule = false;
-        let hasFutureSchedule = false;
+      let calculatedStatus = "berhenti";
+      const isMaintenance = bus.riwayat_perbaikan?.length > 0;
+      let hasActiveSchedule = false;
+      let hasFutureSchedule = false;
 
-        if (bus.jadwal?.length > 0) {
-            hasActiveSchedule = bus.jadwal.some(
-                (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai
-            );
-            hasFutureSchedule = bus.jadwal.some((j) => timeNow < j.jam_mulai);
-        }
+      if (bus.jadwal?.length > 0) {
+        hasActiveSchedule = bus.jadwal.some(
+          (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai,
+        );
+        hasFutureSchedule = bus.jadwal.some((j) => timeNow < j.jam_mulai);
+      }
 
-        if (isMaintenance) {
-            calculatedStatus = "dalam perbaikan";
-        } else if (hasActiveSchedule) {
-            calculatedStatus = "berjalan";
-        } else if (hasFutureSchedule) {
-            calculatedStatus = "dijadwalkan";
-        } else {
-            calculatedStatus = "berhenti";
-        }
+      if (isMaintenance) {
+        calculatedStatus = "dalam perbaikan";
+      } else if (hasActiveSchedule) {
+        calculatedStatus = "berjalan";
+      } else if (hasFutureSchedule) {
+        calculatedStatus = "dijadwalkan";
+      } else {
+        calculatedStatus = "berhenti";
+      }
 
-        bus.status = calculatedStatus;
+      bus.status = calculatedStatus;
 
-        // --- BAGIAN INI DIPERBAIKI ---
-        const currentSchedule = bus.jadwal?.[0] || {};
-        
-        bus.nama_jalur = currentSchedule.jalur?.nama_jalur || "-";
-        bus.nama_driver = currentSchedule.driver?.nama || "-";
-        
-        // 👇 TAMBAHAN PENTING: Mengambil foto driver ke level root object
-        bus.driver_foto = currentSchedule.driver?.driver_foto || null;
+      const currentSchedule =
+        bus.jadwal?.find(
+          (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai,
+        ) ||
+        bus.jadwal?.[0] ||
+        {};
 
-        return bus;
+      bus.nama_jalur = currentSchedule.jalur?.nama_jalur || "-";
+      bus.nama_driver = currentSchedule.driver?.nama || "-";
+      bus.driver_foto = currentSchedule.driver?.driver_foto || null;
+      return bus;
     });
 
     res.json(processedBuses);
@@ -142,7 +142,7 @@ export const updateBus = async (req, res) => {
     if (!bus) return res.status(404).json({ message: "Bus tidak ditemukan" });
 
     const { plat_nomor, kode_bus, kapasitas, jenis_bus, status } = req.body;
-    const fotoFinal = req.file ? req.file.filename : bus.foto; 
+    const fotoFinal = req.file ? req.file.filename : bus.foto;
 
     await bus.update({
       plat_nomor,
@@ -156,7 +156,9 @@ export const updateBus = async (req, res) => {
     res.json({ message: "Bus berhasil diperbarui", data: bus });
   } catch (err) {
     if (err.name === "SequelizeValidationError") {
-      return res.status(400).json({ message: err.errors.map((e) => e.message).join(", ") });
+      return res
+        .status(400)
+        .json({ message: err.errors.map((e) => e.message).join(", ") });
     }
     res.status(500).json({ message: err.message });
   }
@@ -171,8 +173,13 @@ export const deleteBus = async (req, res) => {
     await bus.destroy();
     res.json({ message: "Bus berhasil dihapus" });
   } catch (err) {
-    if(err.name === 'SequelizeForeignKeyConstraintError') {
-        return res.status(400).json({ message: "Tidak dapat menghapus bus karena masih memiliki riwayat jadwal/tracking." });
+    if (err.name === "SequelizeForeignKeyConstraintError") {
+      return res
+        .status(400)
+        .json({
+          message:
+            "Tidak dapat menghapus bus karena masih memiliki riwayat jadwal/tracking.",
+        });
     }
     res.status(500).json({ message: err.message });
   }
