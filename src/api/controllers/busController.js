@@ -52,10 +52,20 @@ export const getAllBus = async (req, res) => {
           where: { tanggal: today },
           required: false,
           order: [["jam_mulai", "ASC"]],
-          include: [
-            // Pastikan attributes menyertakan 'foto'
-            { model: Driver, as: "driver", attributes: ["nama", "foto"] },
-            { model: Jalur, as: "jalur", attributes: ["nama_jalur"] },
+          include: [            
+            { 
+              model: Driver, 
+              as: "driver", 
+              attributes: [
+                "nama", 
+                ["foto", "driver_foto"] 
+              ]
+            },
+            { 
+              model: Jalur, 
+              as: "jalur", 
+              attributes: ["nama_jalur"] 
+            },
           ],
         },
         {
