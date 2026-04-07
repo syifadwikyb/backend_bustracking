@@ -112,7 +112,7 @@ export const getAllBus = async (req, res) => {
         bus.nama_driver = currentSchedule.driver?.nama || "-";
         
         // 👇 TAMBAHAN PENTING: Mengambil foto driver ke level root object
-        bus.foto_driver = currentSchedule.driver?.foto || null;
+        bus.driver_foto = currentSchedule.driver?.driver_foto || null;
 
         return bus;
     });
