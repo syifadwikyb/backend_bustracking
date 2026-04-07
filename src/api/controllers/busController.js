@@ -136,7 +136,7 @@ export const getBusById = async (req, res) => {
         {
           model: Schedule,
           as: "jadwal",
-          where: { tanggal: today },
+          // where: { tanggal: today },
           required: false,
           include: [
             {
@@ -154,10 +154,11 @@ export const getBusById = async (req, res) => {
       ],
     });
 
-    if (!busInstance) return res.status(404).json({ message: "Bus tidak ditemukan" });
+    if (!busInstance)
+      return res.status(404).json({ message: "Bus tidak ditemukan" });
 
     const bus = busInstance.toJSON();
-    
+
     const currentSchedule =
       bus.jadwal?.find(
         (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai,
@@ -216,12 +217,10 @@ export const deleteBus = async (req, res) => {
     res.json({ message: "Bus berhasil dihapus" });
   } catch (err) {
     if (err.name === "SequelizeForeignKeyConstraintError") {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Tidak dapat menghapus bus karena masih memiliki riwayat jadwal/tracking.",
-        });
+      return res.status(400).json({
+        message:
+          "Tidak dapat menghapus bus karena masih memiliki riwayat jadwal/tracking.",
+      });
     }
     res.status(500).json({ message: err.message });
   }
