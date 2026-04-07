@@ -127,53 +127,10 @@ export const getAllBus = async (req, res) => {
 // --- GET BUS BY ID ---
 export const getBusById = async (req, res) => {
   try {
-    const now = dayjs().tz("Asia/Jakarta");
-    const today = now.format("YYYY-MM-DD");
-    const timeNow = now.format("HH:mm:ss");
-
-    const busInstance = await Bus.findByPk(req.params.id, {
-      include: [
-        {
-          model: Schedule,
-          as: "jadwal",
-          // where: { tanggal: today },
-          required: false,
-          include: [
-            {
-              model: Driver,
-              as: "driver",
-              attributes: ["nama", "driver_foto"],
-            },
-            {
-              model: Jalur,
-              as: "jalur",
-              attributes: ["nama_jalur"],
-            },
-          ],
-        },
-      ],
-    });
-
-    if (!busInstance)
-      return res.status(404).json({ message: "Bus tidak ditemukan" });
-
-    const bus = busInstance.toJSON();
-
-    const currentSchedule =
-      bus.jadwal?.find(
-        (j) => timeNow >= j.jam_mulai && timeNow <= j.jam_selesai,
-      ) ||
-      bus.jadwal?.[0] ||
-      {};
-
-    // Mapping manual agar formatnya sama persis dengan getAllBus
-    bus.nama_jalur = currentSchedule.jalur?.nama_jalur || "-";
-    bus.nama_driver = currentSchedule.driver?.nama || "-";
-    bus.driver_foto = currentSchedule.driver?.driver_foto || null;
-
+    const bus = await Bus.findByPk(req.params.id);
+    if (!bus) return res.status(404).json({ message: "Bus tidak ditemukan" });
     res.json(bus);
   } catch (err) {
-    console.error("getBusById error:", err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -217,10 +174,12 @@ export const deleteBus = async (req, res) => {
     res.json({ message: "Bus berhasil dihapus" });
   } catch (err) {
     if (err.name === "SequelizeForeignKeyConstraintError") {
-      return res.status(400).json({
-        message:
-          "Tidak dapat menghapus bus karena masih memiliki riwayat jadwal/tracking.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Tidak dapat menghapus bus karena masih memiliki riwayat jadwal/tracking.",
+        });
     }
     res.status(500).json({ message: err.message });
   }
