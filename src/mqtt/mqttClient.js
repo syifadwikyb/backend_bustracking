@@ -54,33 +54,22 @@ function calculateRollingSpeed(busId, currentSpeed) {
 }
 
 // --- MQTT CLIENT ---
-// const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL;
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL;
 
-// const client = mqtt.connect(MQTT_BROKER_URL);
+const client = mqtt.connect(MQTT_BROKER_URL);
 
-// Di sisi Client-side Next.js
-const BROKER_URL = 'ws://145.79.15.182:8888'; // Pakai IP VPS, bukan localhost!
-
-const client = mqtt.connect(BROKER_URL);
-
-client.on('connect', () => {
-    console.log("✅ Dashboard terhubung ke VPS!");
-    // Pastikan TOPIC ini sama persis dengan yang di Simulator HP/Hardware
-    client.subscribe('diptrack/tracking/bus/+/location'); 
+client.on("connect", () => {
+  console.log("✅ [MQTT UTAMA] Berhasil Terhubung ke Broker!");
+  client.subscribe("diptrack/tracking/bus/#", (err) => {
+    if (!err) {
+      console.log(
+        "📡 [MQTT UTAMA] Sukses Subscribe ke topik diptrack/tracking/bus/#",
+      );
+    } else {
+      console.error("❌ [MQTT UTAMA] Gagal Subscribe:", err);
+    }
+  });
 });
-
-// client.on("connect", () => {
-//   console.log("✅ [MQTT UTAMA] Berhasil Terhubung ke Broker!");
-//   client.subscribe("diptrack/tracking/bus/#", (err) => {
-//     if (!err) {
-//       console.log(
-//         "📡 [MQTT UTAMA] Sukses Subscribe ke topik diptrack/tracking/bus/#",
-//       );
-//     } else {
-//       console.error("❌ [MQTT UTAMA] Gagal Subscribe:", err);
-//     }
-//   });
-// });
 
 client.on("error", (err) => {
   console.error("❌ [MQTT UTAMA] Error Koneksi:", err.message);
