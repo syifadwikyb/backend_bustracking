@@ -24,6 +24,16 @@ export const createBus = async (req, res) => {
         .json({ message: "Plat nomor dan Kode bus wajib diisi" });
     }
 
+    const cekKode = await Bus.findOne({ where: { kode_bus } });
+    if (cekKode) {
+      return res.status(400).json({ message: "Kode Bus sudah digunakan." });
+    }
+
+    const cekPlat = await Bus.findOne({ where: { plat_nomor } });
+    if (cekPlat) {
+      return res.status(400).json({ message: "Plat Nomor sudah terdaftar." });
+    }
+
     const bus = await Bus.create({
       plat_nomor,
       kode_bus,
@@ -140,9 +150,33 @@ export const updateBus = async (req, res) => {
   try {
     const bus = await Bus.findByPk(req.params.id);
     if (!bus) return res.status(404).json({ message: "Bus tidak ditemukan" });
-
     const { plat_nomor, kode_bus, kapasitas, jenis_bus, status } = req.body;
+    
     const fotoFinal = req.file ? req.file.filename : bus.foto;
+    
+    if (!plat_nomor || !kode_bus) {
+      return res.status(400).json({ message: "Plat nomor dan Kode bus wajib diisi" });
+    }
+    
+    const cekKode = await Bus.findOne({ 
+      where: { 
+        kode_bus,
+        id_bus: { [Op.ne]: req.params.id }
+      } 
+    });
+    if (cekKode) {
+      return res.status(400).json({ message: "Kode Bus sudah digunakan." });
+    }
+
+    const cekPlat = await Bus.findOne({ 
+      where: { 
+        plat_nomor,
+        id_bus: { [Op.ne]: req.params.id }
+      } 
+    });
+    if (cekPlat) {
+      return res.status(400).json({ message: "Plat Nomor sudah terdaftar." });
+    }
 
     await bus.update({
       plat_nomor,
@@ -155,10 +189,8 @@ export const updateBus = async (req, res) => {
 
     res.json({ message: "Bus berhasil diperbarui", data: bus });
   } catch (err) {
-    if (err.name === "SequelizeValidationError") {
-      return res
-        .status(400)
-        .json({ message: err.errors.map((e) => e.message).join(", ") });
+    if (err.name === "SequelizeValidationError" || err.name === "SequelizeUniqueConstraintError") {
+      return res.status(400).json({ message: err.errors.map((e) => e.message).join(", ") });
     }
     res.status(500).json({ message: err.message });
   }

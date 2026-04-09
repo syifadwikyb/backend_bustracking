@@ -82,12 +82,56 @@ export const getDrivers = async (req, res) => {
 };
 
 // --- GET BY ID ---
+// --- GET BY ID ---
 export const getDriverById = async (req, res) => {
     try {
-        const driver = await Driver.findByPk(req.params.id);
-        if (!driver) return res.status(404).json({ message: 'Driver tidak ditemukan' });
+        const now = dayjs().tz("Asia/Jakarta");
+        const currentDate = now.format('YYYY-MM-DD');
+        const currentTime = now.format('HH:mm:ss');
+
+        // Tambahkan include Schedule untuk hari ini
+        const driverInstance = await Driver.findByPk(req.params.id, {
+            include: [{
+                model: Schedule,
+                as: 'jadwal',
+                where: { tanggal: currentDate },
+                required: false 
+            }]
+        });
+
+        if (!driverInstance) return res.status(404).json({ message: 'Driver tidak ditemukan' });
+
+        const driver = driverInstance.toJSON();
+        let calculatedStatus = 'berhenti'; // Default
+
+        // Logika kalkulasi yang sama persis dengan getDrivers
+        if (driver.jadwal && driver.jadwal.length > 0) {
+            let isRunning = false;
+            let isScheduled = false;
+
+            for (const s of driver.jadwal) {
+                if (currentTime >= s.jam_mulai && currentTime <= s.jam_selesai) {
+                    isRunning = true;
+                    break;
+                }
+                if (currentTime < s.jam_mulai) {
+                    isScheduled = true;
+                }
+            }
+
+            if (isRunning) calculatedStatus = 'berjalan';
+            else if (isScheduled) calculatedStatus = 'dijadwalkan';
+        }
+
+        // Timpa status mentah DB dengan status hasil kalkulasi waktu nyata
+        driver.status = calculatedStatus;
+        
+        // Hapus array jadwal agar response tetap bersih sesuai kebutuhan frontend
+        delete driver.jadwal;
+
         res.json(driver);
     } catch (err) {
+        console.error('Error getDriverById:', err);
         res.status(500).json({ message: err.message });
     }
 };

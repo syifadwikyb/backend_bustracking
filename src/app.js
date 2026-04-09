@@ -2,7 +2,6 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import { createServer } from "http";
-import startCleanupJob from './cron/Cleanup.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -75,8 +74,6 @@ app.post('/api/bus-location', (req, res) => {
 
 // --- Init Socket ---
 initSocket(server);
-startCleanupJob();
-
 startAutoUpdateSchedules();
 
 // --- JALANKAN SERVER ---
