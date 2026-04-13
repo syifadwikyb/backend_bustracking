@@ -7,7 +7,12 @@ const initSocket = (server) => {
         cors: {
             origin: "*", 
             methods: ["GET", "POST"]
-        }
+        },
+        
+        transports: ["websocket"],
+
+        pingInterval: 25000,
+        pingTimeout: 60000
     });
 
     io.on("connection", (socket) => {
