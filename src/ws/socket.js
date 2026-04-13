@@ -5,10 +5,10 @@ let io;
 const initSocket = (server) => {
     io = new Server(server, {
         cors: {
-            origin: "*", 
+            origin: "*",
             methods: ["GET", "POST"]
         },
-        
+
         transports: ["websocket"],
 
         pingInterval: 25000,
@@ -22,15 +22,22 @@ const initSocket = (server) => {
             socket.join(`bus_${busId}`);
         });
 
+        socket.on("bus_location", (data) => {
+            socket.emit("bus_location_response", {
+                ...data,
+                server_time: Date.now()
+            });
+        });
+
         socket.on("disconnect", () => {
-            console.log(`Client disconnected: ${socket.id}`);
+            console.log(`❌ Client disconnected: ${socket.id}`);
         });
     });
 
     return io;
 };
 
-// Fungsi untuk kirim update ke Frontend
+// 🔥 emit ke semua client
 export const emitBusLocation = (data) => {
     if (io) {
         io.emit("bus_location", data);
