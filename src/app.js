@@ -18,6 +18,7 @@ import jalurRoutes from './api/routes/jalurRoutes.js';
 import maintenanceRoutes from "./api/routes/maintenanceRoutes.js";
 import scheduleRoutes from './api/routes/scheduleRoutes.js';
 import dashboardRoutes from './api/routes/dashboardRoutes.js';
+import analyticsRoutes from './api/routes/analyticsRoutes.js';
 import {startAutoUpdateSchedules} from './api/controllers/scheduleController.js';
 
 import initSocket, { emitBusLocation } from './ws/socket.js'; 
@@ -63,6 +64,7 @@ app.use('/api/jalur', jalurRoutes);
 app.use('/api/maintenance', maintenanceRoutes)
 app.use('/api/schedules', scheduleRoutes)
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // --- Endpoint Hybrid ---
 app.post('/api/bus-location', (req, res) => {

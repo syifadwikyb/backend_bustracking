@@ -82,7 +82,6 @@ export const getDrivers = async (req, res) => {
 };
 
 // --- GET BY ID ---
-// --- GET BY ID ---
 export const getDriverById = async (req, res) => {
     try {
         const now = dayjs().tz("Asia/Jakarta");

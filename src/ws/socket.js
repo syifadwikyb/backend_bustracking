@@ -37,7 +37,6 @@ const initSocket = (server) => {
     return io;
 };
 
-// 🔥 emit ke semua client
 export const emitBusLocation = (data) => {
     if (io) {
         io.emit("bus_location", data);
