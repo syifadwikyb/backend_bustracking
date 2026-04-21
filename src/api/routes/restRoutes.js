@@ -6,7 +6,7 @@ const router = express.Router();
 let busLocations = [];
 
 // POST
-router.post("/bus-location", (req, res) => {
+router.post("/", (req, res) => {
   console.log("BODY:", req.body);
 
   const { bus_id, latitude, longitude, speed } = req.body;
@@ -34,7 +34,7 @@ router.post("/bus-location", (req, res) => {
 });
 
 // GET
-router.get("/bus-location", (req, res) => {
+router.get("/", (req, res) => {
   console.log("GET DIPANGGIL");
 
   res.json({

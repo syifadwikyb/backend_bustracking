@@ -244,7 +244,7 @@ client.on("message", async (topic, message) => {
 
     // kirim ke REST API
     try {
-      await fetch("http://localhost:5000/api/bus-location", {
+      await fetch(`${API_URL}/api/rest/bus-location`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
