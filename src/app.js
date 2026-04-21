@@ -19,6 +19,7 @@ import maintenanceRoutes from "./api/routes/maintenanceRoutes.js";
 import scheduleRoutes from './api/routes/scheduleRoutes.js';
 import dashboardRoutes from './api/routes/dashboardRoutes.js';
 import analyticsRoutes from './api/routes/analyticsRoutes.js';
+import restRoutes from './api/routes/restRoutes.js'
 import {startAutoUpdateSchedules} from './api/controllers/scheduleController.js';
 
 import initSocket, { emitBusLocation } from './ws/socket.js'; 
@@ -65,6 +66,7 @@ app.use('/api/maintenance', maintenanceRoutes)
 app.use('/api/schedules', scheduleRoutes)
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/rest/bus-location', restRoutes);
 
 // --- Endpoint Hybrid ---
 app.post('/api/bus-location', (req, res) => {

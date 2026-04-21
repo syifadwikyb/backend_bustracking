@@ -1,11 +1,12 @@
 import mqtt from "mqtt";
+import fetch from "node-fetch";
 import { emitBusLocation } from "../ws/socket.js";
 import Bus from "../api/models/Bus.js";
 import Schedule from "../api/models/Schedule.js";
 import Jalur from "../api/models/Jalur.js";
 import Halte from "../api/models/Halte.js";
 import { getEtaFromML } from "../api/controllers/EtaController.js";
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 
 dotenv.config();
 
@@ -45,8 +46,8 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1 * (Math.PI / 180)) *
-    Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) ** 2;
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) ** 2;
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c);
@@ -125,7 +126,7 @@ client.on("message", async (topic, message) => {
         : [];
 
     const activeSchedule = jadwalList.find(
-      (j) => j.status?.toLowerCase().trim() === "berjalan"
+      (j) => j.status?.toLowerCase().trim() === "berjalan",
     );
 
     if (!activeSchedule?.jalur?.halte?.length) return;
@@ -142,7 +143,7 @@ client.on("message", async (topic, message) => {
       payload.latitude,
       payload.longitude,
       parseFloat(targetHalte.latitude),
-      parseFloat(targetHalte.longitude)
+      parseFloat(targetHalte.longitude),
     );
 
     // pindah ke halte berikutnya jika sudah dekat
@@ -166,7 +167,7 @@ client.on("message", async (topic, message) => {
           payload.latitude,
           payload.longitude,
           parseFloat(halte.latitude),
-          parseFloat(halte.longitude)
+          parseFloat(halte.longitude),
         );
       } else {
         let prev = allHaltes[(idx - 1 + allHaltes.length) % allHaltes.length];
@@ -174,7 +175,7 @@ client.on("message", async (topic, message) => {
           parseFloat(prev.latitude),
           parseFloat(prev.longitude),
           parseFloat(halte.latitude),
-          parseFloat(halte.longitude)
+          parseFloat(halte.longitude),
         );
       }
 
@@ -208,10 +209,10 @@ client.on("message", async (topic, message) => {
           eta_seconds: eta,
           is_target: i === targetIndex,
         };
-      })
+      }),
     );
 
-    const targetStop = hasilSemuaEta.find(h => h.is_target);
+    const targetStop = hasilSemuaEta.find((h) => h.is_target);
 
     // update database
     await Bus.update(
@@ -224,7 +225,7 @@ client.on("message", async (topic, message) => {
         eta_seconds: targetStop?.eta_seconds || null,
         status: payload.speed > 1 ? "berjalan" : "berhenti",
       },
-      { where: { id_bus: bus_id } }
+      { where: { id_bus: bus_id } },
     );
 
     // kirim ke frontend (real-time)
@@ -241,6 +242,28 @@ client.on("message", async (topic, message) => {
       updated_at: now,
     });
 
+    // kirim ke REST API
+    try {
+      await fetch("http://localhost:5000/api/bus-location", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          bus_id,
+          latitude: payload.latitude,
+          longitude: payload.longitude,
+          speed: payload.speed || 0,
+          next_halte_id: targetStop?.halte_id || null,
+          eta_seconds: targetStop?.eta_seconds || null,
+          timestamp: now,
+        }),
+      });
+
+      console.log("✅ Data dikirim ke REST API");
+    } catch (err) {
+      console.error("❌ Gagal kirim ke REST API:", err.message);
+    }
   } catch (err) {
     console.error("Error MQTT:", err);
   }
