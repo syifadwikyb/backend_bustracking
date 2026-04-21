@@ -1,45 +1,36 @@
 import express from "express";
-
 const router = express.Router();
 
-// mock database
-let busLocations = [];
+// Gunakan Object atau Map agar mudah di-update berdasarkan ID
+let latestBusLocations = {}; 
 
-// POST
+// POST: Menerima data dari MQTT Client
 router.post("/", (req, res) => {
-  console.log("BODY:", req.body);
-
   const { bus_id, latitude, longitude, speed } = req.body;
 
   if (!bus_id) {
-    return res.status(400).json({ error: "bus_id tidak ada" });
+    return res.status(400).json({ error: "bus_id wajib diisi" });
   }
 
-  const data = {
+  // Timpa data lama dengan yang baru (Upsert logic)
+  latestBusLocations[bus_id] = {
     bus_id,
     latitude,
     longitude,
     speed,
-    server_time: Date.now()
+    server_time: new Date()
   };
 
-  busLocations.push(data); // 🔥 WAJIB supaya GET ada isi
-
-  console.log(`[REST-HTTP] Data Masuk Bus ${bus_id} | Speed: ${speed} km/h`);
-
-  res.json({
-    success: true,
-    data
-  });
+  res.json({ success: true, message: "Data updated" });
 });
 
-// GET
+// GET: Dipanggil oleh Frontend (Next.js)
 router.get("/", (req, res) => {
-  console.log("GET DIPANGGIL");
-
+  // Mengubah object menjadi array agar mudah di-map di frontend
+  const dataArray = Object.values(latestBusLocations);
   res.json({
-    total: busLocations.length,
-    data: busLocations
+    total: dataArray.length,
+    data: dataArray
   });
 });
 

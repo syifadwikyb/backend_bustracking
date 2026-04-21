@@ -11,6 +11,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const CACHE_DURATION = 10 * 60 * 1000; // interval cache
+console.log("API_URL:", process.env.API_URL);
 
 // cache data halte di memory
 let cachedHalte = [];
@@ -244,23 +245,22 @@ client.on("message", async (topic, message) => {
 
     // kirim ke REST API
     try {
-      await fetch(`${API_URL}/api/rest/bus-location`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `${process.env.API_URL}/api/rest/bus-location`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bus_id: bus_id,
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+            speed: payload.speed || 0,
+          }),
         },
-        body: JSON.stringify({
-          bus_id,
-          latitude: payload.latitude,
-          longitude: payload.longitude,
-          speed: payload.speed || 0,
-          next_halte_id: targetStop?.halte_id || null,
-          eta_seconds: targetStop?.eta_seconds || null,
-          timestamp: now,
-        }),
-      });
+      );
 
-      console.log("✅ Data dikirim ke REST API");
+      const resJson = await response.json();
+      console.log("✅ Respons dari REST API:", resJson);
     } catch (err) {
       console.error("❌ Gagal kirim ke REST API:", err.message);
     }
