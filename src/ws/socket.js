@@ -8,9 +8,7 @@ const initSocket = (server) => {
             origin: "*",
             methods: ["GET", "POST"]
         },
-
-        transports: ["websocket"],
-
+        transports: ["websocket", "polling"],
         pingInterval: 25000,
         pingTimeout: 60000
     });
