@@ -37,7 +37,10 @@ const initSocket = (server) => {
 
 export const emitBusLocation = (data) => {
     if (io) {
+        console.log("📡 Emitting bus_location:", data.bus_id); // ← tambah ini
         io.emit("bus_location", data);
+    } else {
+        console.log("❌ io belum init!"); // ← dan ini
     }
 };
 
