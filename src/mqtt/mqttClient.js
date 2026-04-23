@@ -236,6 +236,7 @@ client.on("message", async (topic, message) => {
       latitude: payload.latitude,
       longitude: payload.longitude,
       speed: payload.speed || 0,
+      penumpang: payload.passenger_count || 0,
       next_halte_id: targetStop?.halte_id || null,
       nama_halte_tujuan: targetStop?.nama_halte || null,
       distance: targetStop?.distance_meters || 0,
@@ -256,6 +257,7 @@ client.on("message", async (topic, message) => {
             latitude: payload.latitude,
             longitude: payload.longitude,
             speed: payload.speed || 0,
+            passenger_count: payload.passenger_count || 0,
           }),
         },
       );
