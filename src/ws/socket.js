@@ -27,19 +27,11 @@ const initSocket = (server) => {
       });
     });
 
-    socket.on("bus_location_test", (data, callback) => {
-      console.log("📥 EVENT MASUK:", data);
-      console.log("📥 CALLBACK:", callback);
-
-      if (typeof callback === "function") {
-        callback({
-          status: "ok",
-          server_time: Date.now(),
-        });
-      } else {
-        console.log("❌ CALLBACK TIDAK ADA");
-      }
+    socket.on("bus_location_response", (res) => {
+      console.log("🔥 RESPONSE:", res);
     });
+
+    socket.emit("bus_location_test", { bus_id: 1 });
 
     socket.on("disconnect", () => {
       console.log(`❌ Client disconnected: ${socket.id}`);
