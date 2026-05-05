@@ -8,9 +8,10 @@ const initSocket = (server) => {
       origin: "*",
       methods: ["GET", "POST"],
     },
-    transports: ["websocket", "polling"],
+    transports: ["websocket"],
     pingInterval: 25000,
     pingTimeout: 60000,
+    connectTimeout: 45000,
   });
 
   io.on("connection", (socket) => {
