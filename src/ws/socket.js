@@ -43,10 +43,7 @@ const initSocket = (server) => {
     console.log(`Client connected: ${socket.id}`);
 
     socket.on("join_bus_room", (busId, callback) => {
-      const room = `bus_${busId}`;
-      socket.join(room);
-      console.log(`Socket ${socket.id} joined ${room}`);
-
+      socket.join(`bus_${busId}`);
       if (callback) callback({ status: "ok" });
     });
 
@@ -59,13 +56,7 @@ const initSocket = (server) => {
 };
 
 export const emitBusLocation = (data) => {
-  if (io) {
-    console.log("📡 Emitting bus_location to room:", data.bus_id);
-    // Emit ke room spesifik, bukan semua client
-    io.to(`bus_${data.bus_id}`).emit("bus_location", data);
-  } else {
-    console.log("❌ io belum init!");
-  }
+  io.to(`bus_${data.bus_id}`).emit("bus_location", data);
 };
 
 export default initSocket;
