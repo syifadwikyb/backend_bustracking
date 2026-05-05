@@ -42,24 +42,16 @@ const initSocket = (server) => {
   io.on("connection", (socket) => {
     console.log(`Client connected: ${socket.id}`);
 
-    // ⬇️ kirim data langsung saat connect
-    socket.emit("bus_location", {
-      bus_id: 1,
-      latitude: -7.05,
-      longitude: 110.43,
-      speed: 30,
-      penumpang: 1,
-      updated_at: new Date(),
+    socket.on("join_bus_room", (busId, callback) => {
+      const room = `bus_${busId}`;
+      socket.join(room);
+      console.log(`Socket ${socket.id} joined ${room}`);
+
+      if (callback) callback({ status: "ok" });
     });
 
-    socket.on("join_bus_room", (busId, callback) => {
-      socket.join(`bus_${busId}`);
-
-      if (callback) {
-        callback({ status: "ok" });
-      }
-      
-      socket.on("disconnect", () => clearInterval(interval));
+    socket.on("disconnect", () => {
+      console.log(`❌ Client disconnected: ${socket.id}`);
     });
   });
 
@@ -68,10 +60,11 @@ const initSocket = (server) => {
 
 export const emitBusLocation = (data) => {
   if (io) {
-    console.log("📡 Emitting bus_location:", data.bus_id); // ← tambah ini
-    io.emit("bus_location", data);
+    console.log("📡 Emitting bus_location to room:", data.bus_id);
+    // Emit ke room spesifik, bukan semua client
+    io.to(`bus_${data.bus_id}`).emit("bus_location", data);
   } else {
-    console.log("❌ io belum init!"); // ← dan ini
+    console.log("❌ io belum init!");
   }
 };
 
