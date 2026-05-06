@@ -11,7 +11,7 @@ socket.on("connect", () => {
   console.log("📤 Emit join_bus_room bus_id: 1");
 });
 
-socket.on("bus_location", (data) => {
+socket.on("bus_location_update", (data) => {
   console.log("📍 Terima!", data.bus_id, data.latitude);
 });
 
