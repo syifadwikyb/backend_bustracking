@@ -21,20 +21,6 @@ const initSocket = (server) => {
       socket.join(`bus_${busId}`);
     });
 
-    socket.on("bus_location", (data) => {
-      socket.emit("bus_location_response", {
-        ...data,
-        server_time: Date.now(),
-      });
-    });
-
-    socket.on("bus_location_test", (data) => {
-      socket.emit("bus_location_response", {
-        status: "ok",
-        server_time: Date.now(),
-      });
-    });
-
     socket.on("disconnect", () => {
       console.log(`❌ Client disconnected: ${socket.id}`);
     });
@@ -47,6 +33,7 @@ export const emitBusLocation = (data) => {
   if (io) {
     io.to(`bus_${data.bus_id}`).emit("bus_location_update", {
       ...data,
+      client_time: data.client_time,
       server_time: Date.now(),
     });
   } else {
