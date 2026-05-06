@@ -31,7 +31,7 @@ const initSocket = (server) => {
 
 export const emitBusLocation = (data) => {
   if (io) {
-    io.to(`bus_${data.id_bus}`).emit("bus_location", {
+    io.emit("bus_location", {
       ...data,
       client_time: data.client_time,
       server_time: Date.now(),
