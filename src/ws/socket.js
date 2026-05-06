@@ -26,7 +26,14 @@ const initSocket = (server) => {
         ...data,
         server_time: Date.now(),
       });
-    });    
+    });
+
+    socket.on("bus_location_test", (data) => {
+      socket.emit("bus_location_response", {
+        status: "ok",
+        server_time: Date.now(),
+      });
+    });
 
     socket.on("disconnect", () => {
       console.log(`❌ Client disconnected: ${socket.id}`);
