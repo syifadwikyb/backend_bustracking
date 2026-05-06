@@ -30,15 +30,14 @@ const initSocket = (server) => {
 };
 
 export const emitBusLocation = (data) => {
-  if (io) {
-    io.emit("bus_location", {
-      ...data,
-      client_time: data.client_time,
-      server_time: Date.now(),
-    });
-  } else {
-    console.log("❌ io belum init!");
-  }
+  const now = Date.now();
+
+  console.log("SERVER NOW:", now);
+
+  io.emit("bus_location", {
+    ...data,
+    server_time: now,
+  });
 };
 
 export default initSocket;

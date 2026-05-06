@@ -1,290 +1,284 @@
 /**
  * ============================================================
- * SPIKE TEST v5 - Bus Tracking REST API
+ * SPIKE TEST v5 - Bus Tracking Server (FIXED VERSION)
  *
- * Metrik utama:
- *   - Response Time : waktu dari request sampai response
- *   - Error Rate    : % request yang gagal
- *   - Throughput    : requests per detik yang berhasil
+ * Metrik:
+ *   - Latency (server timestamp → client receive)
+ *   - Error Rate
+ *   - Throughput (events/sec)
  *
- * Skenario:
- *   Fase 1 - Baseline : +60 req dalam 60 detik
- *   Fase 2 - Spike 1  : +500 req dalam 10 detik
- *   Fase 3 - Spike 2  : +500 req dalam 2 menit
- *   Fase 4 - Recovery : +60 req dalam 60 detik
- *
- * Jalankan: node spike-test.mjs
+ * FIXES:
+ *   ✔ No Infinity / NaN
+ *   ✔ Valid latency only
+ *   ✔ Proper carryover tracking
+ *   ✔ Stable concurrency handling
  * ============================================================
  */
 
-import fetch from "node-fetch";
+import { io } from "socket.io-client";
 
 const SERVER = "http://145.79.15.182:5000";
-const ENDPOINT = "/api/rest/bus-location";
 
 // ============================================================
-// KONFIGURASI FASE
+// PHASE CONFIG
 // ============================================================
 const PHASES = [
   {
     name: "Fase 1 - Baseline",
-    phaseDuration: 60,
-    spawnTotal: 60,
-    spawnOver: 60,     // 1 req/detik selama 60 detik
+    phaseDuration: 10,
+    spawnTotal: 10,
+    spawnOver: 10,
+    dwellTime: 120,
     spawnBatch: 5,
   },
   {
-    name: "Fase 2 - Spike 1 (Extreme)",
+    name: "Fase 2 - Spike 1",
     phaseDuration: 10,
     spawnTotal: 500,
-    spawnOver: 10,     // 50 req/detik selama 10 detik
+    spawnOver: 10,
+    dwellTime: 180,
     spawnBatch: 20,
   },
   {
-    name: "Fase 3 - Spike 2 (Sustained)",
+    name: "Fase 3 - Sustained",
     phaseDuration: 120,
     spawnTotal: 500,
-    spawnOver: 120,    // ~4 req/detik selama 2 menit
+    spawnOver: 120,
+    dwellTime: 120,
     spawnBatch: 5,
   },
   {
     name: "Fase 4 - Recovery",
     phaseDuration: 60,
     spawnTotal: 60,
-    spawnOver: 60,     // 1 req/detik selama 60 detik
+    spawnOver: 60,
+    dwellTime: 60,
     spawnBatch: 5,
   },
 ];
 
 // ============================================================
-// SATU REQUEST — ukur response time
+// GLOBAL STATE
 // ============================================================
-const makeRequest = async (stats) => {
-  const startTime = Date.now();
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 detik timeout
+let concurrentActive = 0;
+let totalCreated = 0;
 
-    const response = await fetch(`${SERVER}${ENDPOINT}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
+// ============================================================
+// USER SIMULATION (FIXED)
+// ============================================================
+const runUser = (userId, dwellTime, stats) => {
+  let finished = false;
+
+  const promise = new Promise((resolve) => {
+    const socket = io(SERVER, {
+      transports: ["websocket"],
+      reconnection: false,
+      timeout: 10000,
+      forceNew: true,
     });
 
-    clearTimeout(timeoutId);
-    const endTime = Date.now();
-    const responseTime = endTime - startTime;
+    const finish = () => {
+      if (!finished) {
+        finished = true;
+        resolve();
+      }
+    };
 
-    if (response.ok) {
-      stats.successes++;
-      stats.responseTimes.push(responseTime);
-    } else {
+    // ✅ LISTENER DITARUH DI AWAL (ANTI MISS EVENT)
+    socket.on("bus_location", (data) => {
+      console.log("DATA MASUK:", data);
+      stats.eventsReceived++;
+
+      if (data?.server_time && Number.isFinite(data.server_time)) {
+        const latency = Date.now() - data.server_time;
+
+        if (Number.isFinite(latency) && latency >= 0 && latency < 10000) {
+          stats.latencies.push(latency);
+        }
+      }
+    });
+
+    // timeout global
+    const globalTimeout = setTimeout(
+      () => {
+        stats.errors++;
+        stats.errorDetail["timeout"] = (stats.errorDetail["timeout"] || 0) + 1;
+
+        socket.disconnect();
+        finish();
+      },
+      (dwellTime + 10) * 1000,
+    );
+
+    socket.on("connect", () => {
+      concurrentActive++;
+
+      if (concurrentActive > stats.peakConcurrent) {
+        stats.peakConcurrent = concurrentActive;
+      }
+
+      socket.emit("join_bus_room", 1);
+
+      setTimeout(() => {
+        clearTimeout(globalTimeout);
+        concurrentActive = Math.max(0, concurrentActive - 1);
+        socket.disconnect();
+        finish();
+      }, dwellTime * 1000);
+    });
+
+    socket.on("connect_error", (err) => {
       stats.errors++;
-      stats.errorDetail[`HTTP ${response.status}`] =
-        (stats.errorDetail[`HTTP ${response.status}`] || 0) + 1;
-    }
-  } catch (err) {
-    const endTime = Date.now();
-    const responseTime = endTime - startTime;
-    stats.errors++;
-    stats.responseTimes.push(responseTime); // Catat response time meski error
-    const errorMsg = err.name === 'AbortError' ? 'Timeout' : err.message;
-    stats.errorDetail[errorMsg] =
-      (stats.errorDetail[errorMsg] || 0) + 1;
-  }
+      stats.errorDetail[err.message] =
+        (stats.errorDetail[err.message] || 0) + 1;
+
+      clearTimeout(globalTimeout);
+      finish();
+    });
+  });
+
+  return {
+    promise,
+    isFinished: () => finished,
+  };
 };
 
 // ============================================================
-// SPAWN REQUESTS BERTAHAP
+// SPAWN USERS
 // ============================================================
-const spawnRequests = async (phase, stats) => {
-  if (phase.spawnTotal === 0) return;
-
+const spawnUsers = async (phase, stats, allUsers) => {
   const batchSize = phase.spawnBatch || 5;
   const totalBatches = Math.ceil(phase.spawnTotal / batchSize);
-  const batchIntervalMs = (phase.spawnOver * 1000) / totalBatches;
+  const interval = (phase.spawnOver * 1000) / totalBatches;
 
   for (let b = 0; b < totalBatches; b++) {
     const count = Math.min(batchSize, phase.spawnTotal - b * batchSize);
-    const promises = [];
+
     for (let i = 0; i < count; i++) {
       stats.created++;
-      promises.push(makeRequest(stats));
+      totalCreated++;
+
+      const user = runUser(totalCreated, phase.dwellTime, stats);
+      allUsers.push(user);
     }
-    await Promise.all(promises);
-    if (b < totalBatches - 1) await sleep(batchIntervalMs);
+
+    if (b < totalBatches - 1) await sleep(interval);
   }
 };
 
 // ============================================================
-// JALANKAN SATU FASE
+// RUN PHASE
 // ============================================================
-const runPhase = async (phase) => {
-  console.log(`\n${"=".repeat(62)}`);
-  console.log(`🚀 ${phase.name}`);
-  console.log(`   Durasi fase  : ${phase.phaseDuration}s`);
-  if (phase.spawnTotal > 0) {
-    const rate = (phase.spawnTotal / phase.spawnOver).toFixed(1);
-    console.log(
-      `   Requests baru: ${phase.spawnTotal} req dalam ${phase.spawnOver}s (~${rate} req/s)`,
-    );
-  }
-  console.log(`${"=".repeat(62)}`);
+const runPhase = async (phase, carryover = []) => {
+  console.log(`\n🚀 ${phase.name}`);
 
   const stats = {
     created: 0,
-    successes: 0,
     errors: 0,
-    responseTimes: [],
+    eventsReceived: 0,
+    peakConcurrent: concurrentActive,
+    latencies: [],
     errorDetail: {},
   };
 
   const phaseStart = Date.now();
+  const allUsers = [...carryover];
 
-  // Log progress tiap 10 detik
-  const logInterval = setInterval(() => {
-    const elapsed = Math.floor((Date.now() - phaseStart) / 1000);
-    const avgRT = stats.responseTimes.length
-      ? Math.round(
-          stats.responseTimes.reduce((a, b) => a + b, 0) / stats.responseTimes.length,
-        )
-      : "-";
-    process.stdout.write(
-      `   ⏱  ${String(elapsed).padStart(3)}s` +
-        ` | requests: ${String(stats.created).padStart(5)}` +
-        ` | successes: ${String(stats.successes).padStart(5)}` +
-        ` | avg RT: ${String(avgRT).padStart(5)}ms` +
-        ` | errors: ${stats.errors}\n`,
-    );
-  }, 10_000);
-
-  // Spawn requests + tunggu durasi fase secara paralel
   await Promise.all([
-    spawnRequests(phase, stats),
+    spawnUsers(phase, stats, allUsers),
     sleep(phase.phaseDuration * 1000),
   ]);
 
-  clearInterval(logInterval);
+  const remaining = allUsers.filter((u) => !u.isFinished());
 
-  // HITUNG METRIK
-  const elapsed = ((Date.now() - phaseStart) / 1000).toFixed(1);
-  const rt = stats.responseTimes.sort((a, b) => a - b);
-  const total = stats.created;
+  const elapsed = Math.max((Date.now() - phaseStart) / 1000, 1);
 
-  const p50 = percentile(rt, 50);
-  const p95 = percentile(rt, 95);
-  const p99 = percentile(rt, 99);
-  const avgRT = rt.length
-    ? Math.round(rt.reduce((a, b) => a + b, 0) / rt.length)
+  const lat = stats.latencies
+    .filter((v) => Number.isFinite(v))
+    .sort((a, b) => a - b);
+
+  const avgLat = lat.length
+    ? Math.round(lat.reduce((a, b) => a + b, 0) / lat.length)
     : null;
 
-  // Error rate = errors / total requests
-  const errorRate =
-    total > 0 ? ((stats.errors / total) * 100).toFixed(1) : "0.0";
+  const percentile = (p) => {
+    if (!lat.length) return null;
+    const idx = Math.ceil((p / 100) * lat.length) - 1;
+    return lat[Math.max(0, idx)];
+  };
 
-  // Throughput = successful requests / durasi fase
-  const throughput = (stats.successes / parseFloat(elapsed)).toFixed(1);
+  const errorRate = stats.created
+    ? ((stats.errors / stats.created) * 100).toFixed(2)
+    : "0.00";
 
-  // PRINT HASIL
-  console.log(`\n📊 HASIL ${phase.name.toUpperCase()}`);
-  console.log(`─────────────────────────────────────────`);
-  console.log(`  Requests dibuat     : ${total}`);
-  console.log(`  ✅ Successes        : ${stats.successes}`);
-  console.log(`  ❌ Errors           : ${stats.errors} (${errorRate}%)`);
+  const throughput = (stats.eventsReceived / elapsed).toFixed(2);
 
-  if (Object.keys(stats.errorDetail).length > 0) {
-    for (const [msg, cnt] of Object.entries(stats.errorDetail)) {
-      console.log(`     └─ [${cnt}x] ${msg}`);
-    }
-  }
+  console.log(`📊 ${phase.name}`);
+  console.log(`Users dibuat : ${stats.created}`);
+  console.log(`Peak user    : ${stats.peakConcurrent}`);
+  console.log(`Error rate   : ${errorRate}%`);
+  console.log(`Throughput   : ${throughput} event/s`);
 
-  console.log(`  Throughput          : ${throughput} req/s`);
-
-  if (rt.length > 0) {
-    console.log(`\n  ⏱️  Response Time (ms):`);
-    console.log(`    avg : ${avgRT}`);
-    console.log(`    p50 : ${p50}`);
-    console.log(`    p95 : ${p95}`);
-    console.log(`    p99 : ${p99}`);
-    console.log(`    min : ${rt[0]}`);
-    console.log(`    max : ${rt[rt.length - 1]}`);
+  if (lat.length) {
+    console.log(`Latency avg  : ${avgLat} ms`);
+    console.log(
+      `p50 / p95 / p99 : ${percentile(50)} / ${percentile(95)} / ${percentile(99)} ms`,
+    );
   } else {
-    console.log(`\n  ⏱️  Response Time     : tidak terukur`);
+    console.log(`Latency tidak tersedia (timestamp server tidak ada)`);
   }
-
-  console.log(`  Durasi aktual       : ${elapsed}s`);
 
   return {
-    phase: phase.name,
-    created: total,
-    successes: stats.successes,
-    errors: stats.errors,
-    errorRate: parseFloat(errorRate),
-    throughput: parseFloat(throughput),
-    responseTime: { avg: avgRT, p50, p95, p99 },
+    result: {
+      phase: phase.name,
+      created: stats.created,
+      peak: stats.peakConcurrent,
+      errorRate,
+      throughput,
+      latency: {
+        avg: avgLat,
+        p50: percentile(50),
+        p95: percentile(95),
+        p99: percentile(99),
+      },
+    },
+    remaining,
   };
 };
 
 // ============================================================
-// HELPER
+// HELPERS
 // ============================================================
-const percentile = (sorted, p) => {
-  if (!sorted.length) return null;
-  const idx = Math.ceil((p / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, idx)];
-};
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ============================================================
 // MAIN
 // ============================================================
-console.log("╔════════════════════════════════════════════════════╗");
-console.log("║       SPIKE TEST v5 - BUS TRACKING REST API        ║");
-console.log(`║  Target  : ${SERVER}${ENDPOINT.padEnd(30)}║`);
-console.log("║  Metrik  : Response Time, Error Rate, Throughput    ║");
-console.log("╚════════════════════════════════════════════════════╝");
+console.log("🚀 START SPIKE TEST v5");
 
-const allResults = [];
+const results = [];
+let carryover = [];
 
 for (let i = 0; i < PHASES.length; i++) {
-  const result = await runPhase(PHASES[i]);
-  allResults.push(result);
+  const { result, remaining } = await runPhase(PHASES[i], carryover);
+  results.push(result);
+  carryover = remaining;
 
   if (i < PHASES.length - 1) {
-    console.log(`\n⏳ Jeda 3 detik sebelum fase berikutnya...`);
-    await sleep(3_000);
+    console.log("⏳ delay 3 detik...\n");
+    await sleep(3000);
   }
 }
 
-// ============================================================
-// RINGKASAN AKHIR
-// ============================================================
-console.log(`\n${"═".repeat(78)}`);
-console.log("📋 RINGKASAN AKHIR SPIKE TEST v5");
-console.log(`${"═".repeat(78)}`);
-console.log(
-  `${"Fase".padEnd(32)} ${"Req".padStart(5)} ${"Succ".padStart(5)} ${"Err%".padStart(6)} ${"Tput(r/s)".padStart(10)} ${"p50".padStart(6)} ${"p95".padStart(6)} ${"p99".padStart(6)}`,
-);
-console.log("─".repeat(78));
-for (const r of allResults) {
-  const rt = r.responseTime;
-  console.log(
-    `${r.phase.padEnd(32)}` +
-      `${String(r.created).padStart(5)} ` +
-      `${String(r.successes).padStart(5)} ` +
-      `${(r.errorRate + "%").padStart(6)} ` +
-      `${(r.throughput + "r/s").padStart(10)} ` +
-      `${(rt.p50 != null ? rt.p50 + "ms" : "N/A").padStart(6)} ` +
-      `${(rt.p95 != null ? rt.p95 + "ms" : "N/A").padStart(6)} ` +
-      `${(rt.p99 != null ? rt.p99 + "ms" : "N/A").padStart(6)}`,
-  );
+if (carryover.length > 0) {
+  console.log(`Menunggu ${carryover.length} user selesai...`);
+  await Promise.all(carryover.map((u) => u.promise));
 }
-console.log(`${"═".repeat(78)}`);
-console.log("\n📌 Keterangan:");
-console.log("   Req         = requests yang dibuat");
-console.log("   Succ        = requests yang berhasil");
-console.log("   Err%        = % requests yang gagal");
-console.log("   Tput(r/s)   = requests per detik yang berhasil");
-console.log("   p50/p95/p99 = response time persentil (ms) — makin kecil makin baik");
-console.log("\n✅ Spike test selesai.\n");
+
+// ============================================================
+// FINAL SUMMARY
+// ============================================================
+console.log("\n📋 FINAL RESULT");
+console.table(results);
+
+console.log("\n✅ Spike test selesai");
