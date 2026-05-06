@@ -33,7 +33,6 @@ export const emitBusLocation = (data) => {
   if (io) {
     io.to(`bus_${data.bus_id}`).emit("bus_location_update", {
       ...data,
-      client_time: data.client_time,
       server_time: Date.now(),
     });
   } else {
