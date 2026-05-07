@@ -32,7 +32,7 @@ const initSocket = (server) => {
 export const emitBusLocation = (data) => {
   const now = Date.now();
 
-  console.log("SERVER NOW:", now);
+  console.log("🟢 SERVER NOW:", now);
 
   io.emit("bus_location", {
     ...data,
