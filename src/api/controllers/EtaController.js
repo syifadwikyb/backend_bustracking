@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// const ML_API_URL = "http://localhost:8000/prediksi";
+// const ML_API_URL = "http://127.0.0.1:8000/prediksi";
 const ML_API_URL = process.env.ML_API_URL;
 
 // Fungsi ini yang akan dipanggil oleh mqttClient

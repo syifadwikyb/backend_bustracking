@@ -12,7 +12,7 @@ import timezone from "dayjs/plugin/timezone.js";
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-// --- CREATE BUS ---
+// CREATE BUS
 export const createBus = async (req, res) => {
   try {
     const { plat_nomor, kode_bus, kapasitas, jenis_bus, status } = req.body;
@@ -49,7 +49,7 @@ export const createBus = async (req, res) => {
   }
 };
 
-// --- GET ALL BUS ---
+// GET ALL BUS
 export const getAllBus = async (req, res) => {
   try {
     const now = dayjs().tz("Asia/Jakarta");
@@ -134,7 +134,7 @@ export const getAllBus = async (req, res) => {
   }
 };
 
-// --- GET BUS BY ID ---
+// GET BUS BY ID
 export const getBusById = async (req, res) => {
   try {
     const bus = await Bus.findByPk(req.params.id);
@@ -145,7 +145,7 @@ export const getBusById = async (req, res) => {
   }
 };
 
-// --- UPDATE BUS ---
+// UPDATE BUS
 export const updateBus = async (req, res) => {
   try {
     const bus = await Bus.findByPk(req.params.id);
@@ -196,7 +196,7 @@ export const updateBus = async (req, res) => {
   }
 };
 
-// --- DELETE BUS ---
+// DELETE BUS
 export const deleteBus = async (req, res) => {
   try {
     const bus = await Bus.findByPk(req.params.id);

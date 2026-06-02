@@ -4,9 +4,7 @@ import Bus from "../models/Bus.js";
 import Driver from "../models/Driver.js";
 import { Op } from "sequelize";
 
-// ===============================
-// 📊 GET ANALYTICS
-// ===============================
+// GET
 export const getAnalytics = async (req, res) => {
   try {
     const { type } = req.query;
@@ -15,7 +13,7 @@ export const getAnalytics = async (req, res) => {
 
     let start_date, end_date;
 
-    // 🔥 FILTER LOGIC
+    // FILTER LOGIC
     switch (type) {
       case "7days":
         start_date = now.subtract(7, "day").format("YYYY-MM-DD");
