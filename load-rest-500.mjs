@@ -8,10 +8,10 @@ const POLL_INTERVAL_MS = 5000;
 const PHASES = [
   {
     name: "Load 500 Users",
-    duration: 300,
-    total: 500,
-    over: 120,
-    batch: 20,
+    duration: 300, // lama user aktif dalam detik
+    total: 500, // total user yang akan disimulasikan
+    over: 120, // waktu total user tercapai dalam 120 detik
+    batch: 20, // setiap kali penambahan user, ditambahkan 20 user sekaligus
   },
 ];
 
@@ -132,9 +132,6 @@ const runPhase = async (phase) => {
   console.log(`Throughput     : ${throughput} resp/s`);
   console.log(`Avg Latency    : ${avg} ms`);
   console.log(`P50 / P95 / P99: ${p50} / ${p95} / ${p99} ms`);
-  console.log(`\nCATATAN: Latency = Date.now() - server_time`);
-  console.log(`         Konsisten dengan pengukuran Socket.IO`);
-  console.log(`         Nilai tinggi (~3000-5000ms) wajar karena polling interval ${POLL_INTERVAL_MS}ms`);
 };
 
 // ─── Main ─────────────────────────────────────────────────────────────────────

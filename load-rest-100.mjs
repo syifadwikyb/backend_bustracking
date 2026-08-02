@@ -1,5 +1,6 @@
 import fetch from "node-fetch";
 
+// Konfigurasi dengan 1 bus, 100 user, polling setiap 5 detik
 const SERVER           = "http://145.79.15.182:5000";
 const ENDPOINT         = `${SERVER}/api/rest/bus-location`;
 const BUS_ID           = 1;
@@ -8,23 +9,24 @@ const POLL_INTERVAL_MS = 5000;
 const PHASES = [
   { 
     name: "Load 100 Users", 
-    duration: 300, 
-    total: 100, 
-    over: 120, 
-    batch: 5 
+    duration: 300, // lama user aktif dalam detik
+    total: 100, // total user yang akan disimulasikan
+    over: 120, // waktu total user tercapai dalam 120 detik
+    batch: 5  // setiap kali penambahan user, ditambahkan 5 user sekaligus
   },
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let active = 0;
 
+// Fungsi untuk menghitung persentil (P50, P95, P99)
 const percentile = (arr, p) => {
   if (!arr.length) return null;
   const s = [...arr].sort((a, b) => a - b);
   return s[Math.ceil((p / 100) * s.length) - 1];
 };
 
-// ─── User Simulation ─────────────────────────────────────────────────────────
+// Simulasi satu user 
 const runUser = (phase, stats) => {
   let finished = false;
 
@@ -54,8 +56,7 @@ const runUser = (phase, stats) => {
               ? busData.server_time
               : new Date(busData.server_time).getTime();
 
-            // Latency = selisih waktu client terima vs waktu server kirim data
-            // Konsisten dengan Socket.IO: Date.now() - data.server_time
+            // Menghitung latency: latency = waktu diterima client - waktu data dibuat server/mengirim data
             const latency = Math.max(0, Date.now() - serverTs);
             if (latency < 60_000) stats.latencies.push(latency);
           }
@@ -79,7 +80,7 @@ const runUser = (phase, stats) => {
   return { promise, isFinished: () => finished };
 };
 
-// ─── Spawn ────────────────────────────────────────────────────────────────────
+// Menambahkan user secara bertahap
 const spawn = async (phase, stats, users) => {
   const batchSize    = phase.batch;
   const totalBatches = Math.ceil(phase.total / batchSize);
@@ -92,7 +93,7 @@ const spawn = async (phase, stats, users) => {
   }
 };
 
-// ─── Run Phase ────────────────────────────────────────────────────────────────
+// Menjalankan satu fase pengujian
 const runPhase = async (phase) => {
   console.log(`\n🚀 ${phase.name}`);
 
@@ -100,6 +101,7 @@ const runPhase = async (phase) => {
   const users = [];
   const phaseStart = Date.now();
 
+  // Menampilkan status setiap 10 detik
   const logTimer = setInterval(() => {
     const el  = Math.floor((Date.now() - phaseStart) / 1000);
     const avg = stats.latencies.length
@@ -112,10 +114,11 @@ const runPhase = async (phase) => {
   clearInterval(logTimer);
   await Promise.all(users.map((u) => u.promise));
 
-  const actualDuration = Math.max((Date.now() - phaseStart) / 1000, 1);
-  const totalReq       = stats.responses + stats.errors;
-  const errorRate      = totalReq > 0 ? ((stats.errors / totalReq) * 100).toFixed(3) : "0.000";
-  const throughput     = (stats.responses / actualDuration).toFixed(2);
+  // Menghitung metrik akhir
+  const actualDuration = Math.max((Date.now() - phaseStart) / 1000, 1); // Menghitung lama pengujian yang sebenarnya berlangsung dalam satuan detik.
+  const totalReq       = stats.responses + stats.errors; // Menghitung jumlah seluruh request yang dikirim.
+  const errorRate      = totalReq > 0 ? ((stats.errors / totalReq) * 100).toFixed(3) : "0.000"; // Menghitung persentase error dari total request.
+  const throughput     = (stats.responses / actualDuration).toFixed(2); // Menghitung jumlah response sukses yang mampu dilayani server setiap detik.
 
   const avg = stats.latencies.length
     ? Math.round(stats.latencies.reduce((a, b) => a + b, 0) / stats.latencies.length)
@@ -132,12 +135,9 @@ const runPhase = async (phase) => {
   console.log(`Throughput     : ${throughput} resp/s`);
   console.log(`Avg Latency    : ${avg} ms`);
   console.log(`P50 / P95 / P99: ${p50} / ${p95} / ${p99} ms`);
-  console.log(`\nCATATAN: Latency = Date.now() - server_time`);
-  console.log(`         Konsisten dengan pengukuran Socket.IO`);
-  console.log(`         Nilai tinggi (~3000-5000ms) wajar karena polling interval ${POLL_INTERVAL_MS}ms`);
 };
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// Main
 console.log("🌐 REST API LOAD TEST — /api/rest/bus-location");
 console.log(`Server  : ${SERVER}`);
 console.log(`Polling : ${POLL_INTERVAL_MS}ms per user`);

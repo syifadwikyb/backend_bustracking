@@ -12,7 +12,9 @@ let active = 0;
 
 const percentile = (arr, p) => {
   if (!arr.length) return null;
+  // Mengurutkan semua response time
   const s = [...arr].sort((a, b) => a - b);
+  // Mengambil nilai pada posisi percentil
   return s[Math.ceil((p / 100) * s.length) - 1];
 };
 
@@ -30,6 +32,7 @@ const runUser = (phase, stats) => {
       try {
         const res = await fetch(ENDPOINT);
 
+        // Menghitung response time: waktu diterima client - waktu request dikirim
         const responseTime = Date.now() - start;
         stats.responseTimes.push(responseTime);
 

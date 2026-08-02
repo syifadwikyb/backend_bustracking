@@ -268,6 +268,7 @@ const updateHalteCache = async () => {
   try {
     const haltes = await Halte.findAll({
       attributes: ["id_halte", "nama_halte", "latitude", "longitude"],
+      order: [["urutan", "ASC"]],
       raw: true,
     });
 
@@ -281,37 +282,31 @@ updateHalteCache();
 
 setInterval(updateHalteCache, CACHE_DURATION);
 
+// Rumus Haversine untuk menghitung jarak antara dua titik koordinat
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000;
-
   const dLat = (lat2 - lat1) * (Math.PI / 180);
-
   const dLon = (lon2 - lon1) * (Math.PI / 180);
-
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1 * (Math.PI / 180)) *
       Math.cos(lat2 * (Math.PI / 180)) *
       Math.sin(dLon / 2) ** 2;
-
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
   return Math.round(R * c);
 }
 
+// Menghitung rolling speed rata-rata dari 3 data terakhir untuk setiap bus
 function calculateRollingSpeed(busId, currentSpeed) {
   if (!busSpeedBuffer[busId]) {
     busSpeedBuffer[busId] = [];
   }
-
   busSpeedBuffer[busId].push(currentSpeed);
 
   if (busSpeedBuffer[busId].length > 3) {
     busSpeedBuffer[busId].shift();
   }
-
   const sum = busSpeedBuffer[busId].reduce((a, b) => a + b, 0);
-
   return parseFloat((sum / busSpeedBuffer[busId].length).toFixed(2));
 }
 
@@ -368,15 +363,11 @@ async function processEtaAndUpdate(
       const r = routeData[h.id_halte];
 
       const eta = await getEtaFromML({
-        remaining_halte_count: allHaltes.length - r.step,
-
-        distance_to_target: r.distance,
-
-        rolling_speed_30s: rollingSpeed,
-
-        hour_of_day: now.getHours(),
-
-        day_of_week: now.getDay(),
+        remaining_halte_count: allHaltes.length - r.step, // Jumlah halte tersisa
+        distance_to_target: r.distance, // Jarak ke halte
+        rolling_speed_30s: rollingSpeed, // Kecepatan rata-rata
+        hour_of_day: now.getHours(), // Jam saat ini
+        day_of_week: now.getDay(), // Hari saat ini
       });
 
       return {
@@ -417,25 +408,15 @@ async function processEtaAndUpdate(
   // =========================
   emitBusLocation({
     bus_id,
-
     latitude: payload.latitude,
-
     longitude: payload.longitude,
-
     speed: payload.speed || 0,
-
     penumpang: payload.passenger_count || 0,
-
     next_halte_id: targetStop?.halte_id || null,
-
     nama_halte_tujuan: targetStop?.nama_halte || null,
-
     distance: targetStop?.distance_meters || 0,
-
     eta_seconds: targetStop?.eta_seconds || null,
-
     daftar_eta: hasilSemuaEta,
-
     updated_at: now,
   });
 }
@@ -493,6 +474,8 @@ client.on("message", async (topic, message) => {
                 {
                   model: Halte,
                   as: "halte",
+                  separate: true,
+                  order: [["urutan", "ASC"]],
                 },
               ],
             },
@@ -517,7 +500,7 @@ client.on("message", async (topic, message) => {
       return;
     }
 
-    const allHaltes = [...activeSchedule.jalur.halte].reverse();
+    const allHaltes = [...activeSchedule.jalur.halte];
 
     // =========================
     // TARGET HALTE

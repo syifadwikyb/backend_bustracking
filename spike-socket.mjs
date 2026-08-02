@@ -23,6 +23,7 @@ const runUser = (dwellTime, phaseStats) => {
   let finished = false;
 
   const promise = new Promise((resolve) => {
+    // Membuat koneksi Socket.IO
     const socket = io(SERVER, { transports: ["websocket"], reconnection: false, timeout: 10000, forceNew: true });
     const finish = () => { if (!finished) { finished = true; resolve(); } };
 

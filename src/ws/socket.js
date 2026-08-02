@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 
 let io;
 
+// Menginisialisasi server Socket.IO
 const initSocket = (server) => {
   io = new Server(server, {
     cors: {
@@ -14,6 +15,7 @@ const initSocket = (server) => {
     connectTimeout: 45000,
   });
 
+  // Menangani koneksi klien
   io.on("connection", (socket) => {
     console.log(`Client connected: ${socket.id}`);
 
@@ -29,11 +31,11 @@ const initSocket = (server) => {
   return io;
 };
 
+// Mengirim data lokasi bus
 export const emitBusLocation = (data) => {
+  // Mengambil waktu server saat ini
   const now = Date.now();
-
   console.log("🟢 SERVER NOW:", now);
-
   io.emit("bus_location", {
     ...data,
     server_time: now,

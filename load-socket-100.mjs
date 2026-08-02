@@ -20,6 +20,7 @@ const runUser = (phase, stats) => {
   let finished = false;
 
   const promise = new Promise((resolve) => {
+    // Membuat koneksi Socket.IO
     const socket = io(SERVER, {
       transports: ["websocket"],
       reconnection: false,
@@ -92,13 +93,13 @@ const runPhase = async (phase) => {
   clearInterval(logTimer);
   await Promise.all(users.map((u) => u.promise));
 
-  const actualDuration = Math.max((Date.now() - phaseStart) / 1000, 1);
-  const totalEvents = stats.eventsReceived + stats.errors;
+  const actualDuration = Math.max((Date.now() - phaseStart) / 1000, 1); // Menghitung lama pengujian yang sebenarnya berlangsung dalam satuan detik.
+  const totalEvents = stats.eventsReceived + stats.errors; // Menghitung jumlah seluruh request yang dikirim.
   const errorRate = totalEvents > 0
     ? ((stats.errors / totalEvents) * 100).toFixed(3)
-    : "0.000";
+    : "0.000"; // Menghitung persentase error dari total request.
 
-  const throughput = (stats.eventsReceived / actualDuration).toFixed(2);
+  const throughput = (stats.eventsReceived / actualDuration).toFixed(2); // Menghitung jumlah response sukses yang mampu dilayani server setiap detik.
 
   const p50 = percentile(stats.latencies, 50);
   const p95 = percentile(stats.latencies, 95);
